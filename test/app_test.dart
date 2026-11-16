@@ -94,10 +94,16 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    Future<void> shot(String name) => expectLater(
-      find.byType(AllInOneApp),
-      matchesGoldenFile('screenshots/$name.png'),
-    );
+    /// Screenshots show dates relative to today, so they are review material
+    /// rather than pixel references: written with --update-goldens, never
+    /// compared.
+    Future<void> shot(String name) async {
+      if (!autoUpdateGoldenFiles) return;
+      await expectLater(
+        find.byType(AllInOneApp),
+        matchesGoldenFile('screenshots/$name.png'),
+      );
+    }
 
     await tester.pumpWidget(
       MultiProvider(
