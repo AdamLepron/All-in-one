@@ -51,6 +51,43 @@ class MediaChannel {
     await Future<void>.delayed(const Duration(milliseconds: 800));
   }
 
+  /// Opens a PDF: handle, page count and page sizes (width, height pairs).
+  static Future<({int id, int count, List<double> sizes})> pdfOpen(
+    String path,
+  ) async {
+    final map = (await _channel.invokeMapMethod<String, Object?>('pdfOpen', {
+      'path': path,
+    }))!;
+    return (
+      id: map['id']! as int,
+      count: map['count']! as int,
+      sizes: (map['sizes']! as List).cast<double>(),
+    );
+  }
+
+  static Future<Uint8List?> pdfRender(int id, int page, int width) =>
+      _channel.invokeMethod<Uint8List>('pdfRender', {
+        'id': id,
+        'page': page,
+        'width': width,
+      });
+
+  static Future<void> pdfClose(int id) => _quiet('pdfClose', {'id': id});
+
+  /// Applies the sound settings to an audio session and returns what the
+  /// device supports, or null off-device.
+  static Future<Map<String, Object?>?> effects(
+    Map<String, Object> state,
+  ) async {
+    try {
+      return await _channel.invokeMapMethod<String, Object?>('effects', state);
+    } on MissingPluginException {
+      return null;
+    } on PlatformException {
+      return null;
+    }
+  }
+
   static Future<double> brightness() async =>
       await _value('getBrightness') ?? 0.5;
 

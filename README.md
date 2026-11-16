@@ -10,8 +10,9 @@ documents, notes, fichiers et utilitaires. Développée avec Flutter.
 | 1 — Fondations | Navigation à 5 onglets, thèmes (clair, sombre, AMOLED, accent), accueil, recherche, Notes, Calculatrice, Convertisseur | Livrée (0.1.0) |
 | 2 — Fichiers et musique | Gestionnaire de fichiers (navigation, copie, déplacement, renommage, corbeille 30 jours, partage), lecteur de musique (bibliothèque, mini-lecteur, écran de lecture, file d'attente, lecture en arrière-plan) | Livrée (0.2.0) |
 | 3 — Galerie et vidéo | Galerie (chronologie par jour, albums, favoris, visionneuse avec zoom, partage, corbeille), lecteur vidéo à gestes (saut ±10 s, recherche, luminosité, volume, vitesse, verrouillage, reprise) | Livrée (0.3.0) |
+| 4 — Documents et égaliseur | Lecteur de documents (bibliothèque, PDF en défilement continu avec zoom et mode nuit, fichiers texte, reprise), égaliseur (bandes, préréglages, balance gauche/droite, basses, élargissement, amplification) | Livrée (0.4.0) |
 
-Les 14 autres modules apparaissent dans l'application avec l'étiquette « Bientôt ».
+Les 12 autres modules apparaissent dans l'application avec l'étiquette « Bientôt ».
 
 ## Structure
 

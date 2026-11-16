@@ -139,13 +139,66 @@ class AppSettings extends ChangeNotifier {
       _videoPositions.isEmpty ? null : _videoPositions.first.split(':').first;
 
   /// Remembers [position]; pass [Duration.zero] once the video is finished.
+  /// Listeners are told on the next frame, so this is safe to call while a
+  /// screen is being disposed.
   void setVideoPosition(String key, Duration position) {
     final list = _videoPositions.where((e) => !e.startsWith('$key:')).toList();
     if (position > Duration.zero) {
       list.insert(0, '$key:${position.inMilliseconds}');
     }
-    _set(() => _prefs.setStringList('videoPositions', list.take(200).toList()));
+    _prefs.setStringList('videoPositions', list.take(200).toList());
+    WidgetsBinding.instance.addPostFrameCallback((_) => notifyListeners());
   }
+
+  /// Free-form storage for modules that serialise their own state.
+  String? raw(String key) => _prefs.getString(key);
+  void setRaw(String key, String value) =>
+      _set(() => _prefs.setString(key, value));
+
+  /// Recently opened documents as "path|page", most recent first.
+  List<String> get _recentDocs =>
+      _prefs.getStringList('recentDocs') ?? const [];
+
+  List<String> get recentDocPaths => [
+    for (final e in _recentDocs) e.substring(0, e.lastIndexOf('|')),
+  ];
+
+  int docPage(String path) {
+    for (final e in _recentDocs) {
+      if (e.startsWith('$path|')) {
+        return int.parse(e.substring(path.length + 1));
+      }
+    }
+    return 0;
+  }
+
+  /// With [notify] false, listeners are not told: required when called
+  /// while a screen is being built or disposed.
+  void setDocPage(String path, int page, {bool notify = true}) {
+    final list = [
+      '$path|$page',
+      ..._recentDocs.where((e) => !e.startsWith('$path|')),
+    ].take(30).toList();
+    if (notify) {
+      _set(() => _prefs.setStringList('recentDocs', list));
+    } else {
+      _prefs.setStringList('recentDocs', list);
+    }
+  }
+
+  void forgetDoc(String path) => _set(
+    () => _prefs.setStringList(
+      'recentDocs',
+      _recentDocs.where((e) => !e.startsWith('$path|')).toList(),
+    ),
+  );
+
+  bool get readerNight => _prefs.getBool('readerNight') ?? false;
+  set readerNight(bool v) => _set(() => _prefs.setBool('readerNight', v));
+
+  double get readerTextSize => _prefs.getDouble('readerTextSize') ?? 15;
+  set readerTextSize(double v) =>
+      _set(() => _prefs.setDouble('readerTextSize', v));
 
   void _set(Future<bool> Function() write) {
     write();

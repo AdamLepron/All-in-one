@@ -40,6 +40,9 @@ class MusicController extends ChangeNotifier {
   /// through [notifyListeners].
   final position = ValueNotifier(Duration.zero);
 
+  /// Android audio session of the player, needed to attach sound effects.
+  final audioSessionId = ValueNotifier<int?>(null);
+
   Song? get current {
     final i = _index;
     return i == null || i >= queue.length ? null : queue[i];
@@ -130,6 +133,9 @@ class MusicController extends ChangeNotifier {
         notifyListeners();
       }),
       player.positionStream.listen((p) => position.value = p),
+      player.androidAudioSessionIdStream.listen(
+        (id) => audioSessionId.value = id,
+      ),
       player.playbackEventStream.listen(
         (_) {},
         onError: (Object _) {

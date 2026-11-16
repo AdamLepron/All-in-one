@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../core/pinch.dart';
 import '../../core/platform.dart';
 import '../../core/settings.dart';
 import '../../core/util.dart';
@@ -101,8 +102,6 @@ class MediaGrid extends StatefulWidget {
 }
 
 class _MediaGridState extends State<MediaGrid> {
-  double _scale = 1;
-
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<AppSettings>();
@@ -117,12 +116,10 @@ class _MediaGridState extends State<MediaGrid> {
       groups.last.$2.add(i);
     }
 
-    return GestureDetector(
-      onScaleStart: (_) => _scale = 1,
-      onScaleUpdate: (d) => _scale = d.scale,
-      onScaleEnd: (_) {
-        if (_scale > 1.25 && columns > 2) settings.galleryColumns = columns - 1;
-        if (_scale < 0.8 && columns < 7) settings.galleryColumns = columns + 1;
+    return PinchDetector(
+      onEnd: (scale) {
+        if (scale > 1.25 && columns > 2) settings.galleryColumns = columns - 1;
+        if (scale < 0.8 && columns < 7) settings.galleryColumns = columns + 1;
       },
       child: ListenableBuilder(
         listenable: widget.selection,

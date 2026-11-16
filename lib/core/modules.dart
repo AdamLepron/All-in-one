@@ -2,7 +2,9 @@ import 'package:material_ui/material_ui.dart';
 
 import '../modules/calculator/calculator_page.dart';
 import '../modules/converter/converter_page.dart';
+import '../modules/equalizer/equalizer_page.dart';
 import '../modules/files/files_page.dart';
+import '../modules/reader/reader_page.dart';
 import '../modules/gallery/gallery_page.dart';
 import '../modules/video/video_page.dart';
 import '../modules/music/music_page.dart';
@@ -63,12 +65,13 @@ final modules = <AppModule>[
     Family.media,
     (_) => const MusicPage(),
   ),
-  const AppModule(
+  AppModule(
     'equalizer',
     'Égaliseur',
     'Balance et effets sonores',
     Icons.equalizer_rounded,
     Family.media,
+    (_) => const EqualizerPage(),
   ),
   const AppModule(
     'photo_editor',
@@ -100,12 +103,13 @@ final modules = <AppModule>[
     Family.productivity,
     (_) => const FilesPage(),
   ),
-  const AppModule(
+  AppModule(
     'reader',
     'Lecteur de documents',
     'PDF, Office, livres',
     Icons.menu_book_rounded,
     Family.productivity,
+    (_) => const ReaderPage(),
   ),
   const AppModule(
     'doc_editor',

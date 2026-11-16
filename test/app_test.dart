@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:all_in_one/core/settings.dart';
 import 'package:all_in_one/main.dart';
+import 'package:all_in_one/modules/equalizer/equalizer_controller.dart';
 import 'package:all_in_one/modules/files/file_ops.dart';
 import 'package:all_in_one/modules/files/files_ui.dart';
 import 'package:all_in_one/modules/files/folder_page.dart';
@@ -11,6 +12,7 @@ import 'package:all_in_one/modules/music/music_controller.dart';
 import 'package:all_in_one/modules/music/now_playing.dart';
 import 'package:all_in_one/modules/music/song.dart';
 import 'package:all_in_one/modules/notes/notes_store.dart';
+import 'package:all_in_one/modules/reader/reader_page.dart';
 import 'package:all_in_one/shell/app_shell.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -67,6 +69,11 @@ void main() {
       await File('${tmp.path}/contrat.pdf').writeAsString('x' * 184000);
       await File('${tmp.path}/photo.jpg').writeAsString('x' * 2400000);
       await File('${tmp.path}/morceau.mp3').writeAsString('x' * 5200000);
+      await File('${tmp.path}/Documents/notes.txt').writeAsString(
+        'Liste de courses\n\n- Pain\n- Lait\n- Œufs\n\nPenser à rappeler le plombier avant vendredi.\n',
+      );
+      await File('${tmp.path}/Documents/rapport.docx')
+          .writeAsString('x' * 64000);
       await File('${tmp.path}/archive.zip').writeAsString('x' * 1200);
     });
     addTearDown(() => tmp.parent.deleteSync(recursive: true));
@@ -111,6 +118,9 @@ void main() {
           ChangeNotifierProvider.value(value: settings),
           ChangeNotifierProvider.value(value: notes),
           ChangeNotifierProvider.value(value: music),
+          ChangeNotifierProvider(
+            create: (_) => EqualizerController(settings, music),
+          ),
           ChangeNotifierProvider(create: (_) => FilesClipboard()),
           ChangeNotifierProvider.value(value: library),
         ],
@@ -353,6 +363,43 @@ void main() {
     expect(find.text('photo.jpg'), findsOneWidget);
     await tester.pageBack();
     await settle();
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    // Document library and text viewer.
+    Navigator.of(
+      tester.element(find.byType(AppShell)),
+    ).push(MaterialPageRoute<void>(builder: (_) => ReaderPage(root: tmp.path)));
+    await settle();
+    expect(find.text('contrat.pdf'), findsOneWidget);
+    expect(find.text('rapport.docx'), findsOneWidget);
+    await tester.tap(find.text('notes.txt'));
+    await settle();
+    expect(find.text('- Pain'), findsOneWidget);
+    await shot('25_text_viewer');
+    await tester.pageBack();
+    await settle();
+    expect(find.text('Reprendre la lecture'), findsOneWidget);
+    await shot('26_documents');
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    // Equaliser: a preset changes the bands and enables the effect.
+    await tester.tap(find.text('Médias'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Égaliseur').last);
+    await tester.pumpAndSettle();
+    final eq = tester.element(find.text('Balance')).read<EqualizerController>();
+    expect(eq.enabled, false);
+    await tester.tap(find.text('Rock'));
+    await tester.pumpAndSettle();
+    expect(eq.enabled, true);
+    expect(eq.preset, 'Rock');
+    expect(eq.levels.first, greaterThan(0));
+    eq.setBalance(-0.3);
+    await tester.pumpAndSettle();
+    expect(find.text('Gauche 30 %'), findsOneWidget);
+    await shot('27_equalizer');
     await tester.pageBack();
     await tester.pumpAndSettle();
 

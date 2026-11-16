@@ -28,6 +28,8 @@ import java.util.concurrent.Executors
 class MainActivity : AudioServiceActivity() {
     private val executor = Executors.newFixedThreadPool(4)
     private val main = Handler(Looper.getMainLooper())
+    private val pdf = PdfDocuments()
+    private val effects = AudioEffects()
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -52,6 +54,16 @@ class MainActivity : AudioServiceActivity() {
                                 call.argument<Boolean>("video") ?: false,
                                 call.argument<Int>("size") ?: 256,
                             )
+                            "pdfOpen" -> pdf.open(call.argument<String>("path")!!)
+                            "pdfRender" -> pdf.render(
+                                call.argument<Int>("id")!!,
+                                call.argument<Int>("page")!!,
+                                call.argument<Int>("width")!!,
+                            )
+                            "pdfClose" -> {
+                                pdf.close(call.argument<Int>("id")!!)
+                                null
+                            }
                             "scan" -> {
                                 val paths = call.argument<List<String>>("paths") ?: emptyList()
                                 MediaScannerConnection.scanFile(this, paths.toTypedArray(), null, null)
@@ -100,6 +112,17 @@ class MainActivity : AudioServiceActivity() {
                 audio.setStreamVolume(AudioManager.STREAM_MUSIC, Math.round(value * max).toInt(), 0)
                 result.success(null)
             }
+            "effects" -> result.success(
+                effects.apply(
+                    call.argument<Int>("session")!!,
+                    call.argument<Boolean>("enabled") ?: false,
+                    call.argument<List<Double>>("levels") ?: emptyList(),
+                    call.argument<Double>("bass") ?: 0.0,
+                    call.argument<Double>("widening") ?: 0.0,
+                    call.argument<Double>("gain") ?: 0.0,
+                    call.argument<Double>("balance") ?: 0.0,
+                )
+            )
             "keepScreenOn" -> {
                 if (call.argument<Boolean>("on") == true) {
                     window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -260,6 +283,8 @@ class MainActivity : AudioServiceActivity() {
     }
 
     override fun onDestroy() {
+        effects.release()
+        pdf.closeAll()
         executor.shutdown()
         super.onDestroy()
     }

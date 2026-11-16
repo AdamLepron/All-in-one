@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/settings.dart';
 import '../../core/util.dart';
+import '../equalizer/equalizer_page.dart';
 import 'artwork.dart';
 import 'music_controller.dart';
 import 'song.dart';
@@ -119,6 +120,16 @@ class _NowPlayingState extends State<NowPlaying> {
                           ),
                         ),
                       ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Égaliseur',
+                    icon: const Icon(Icons.equalizer_rounded),
+                    color: white,
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const EqualizerPage(),
+                      ),
                     ),
                   ),
                   IconButton(

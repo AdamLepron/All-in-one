@@ -10,6 +10,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../core/settings.dart';
 import '../../core/util.dart';
 import '../music/music_controller.dart';
+import '../reader/documents.dart';
 import 'file_ops.dart';
 import 'files_ui.dart';
 
@@ -108,6 +109,10 @@ class _FolderPageState extends State<FolderPage> {
     if (e.kind == FileKind.audio &&
         context.read<MusicController>().playPath(e.path)) {
       showMessage(context, 'Lecture de ${e.name}');
+      return;
+    }
+    if (docTypeOf(e.path) != DocType.other) {
+      await openDocument(context, e.path);
       return;
     }
     final result = await OpenFilex.open(e.path);

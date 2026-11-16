@@ -6,6 +6,7 @@ import 'core/theme.dart';
 
 import 'package:just_audio_background/just_audio_background.dart';
 
+import 'modules/equalizer/equalizer_controller.dart';
 import 'modules/files/files_ui.dart';
 import 'modules/gallery/media_library.dart';
 import 'modules/music/music_controller.dart';
@@ -30,6 +31,10 @@ Future<void> main() async {
         ChangeNotifierProvider.value(value: settings),
         ChangeNotifierProvider.value(value: notes),
         ChangeNotifierProvider.value(value: music),
+        ChangeNotifierProvider(
+          create: (_) => EqualizerController(settings, music),
+          lazy: false,
+        ),
         ChangeNotifierProvider(create: (_) => FilesClipboard()),
         ChangeNotifierProvider(
           create: (_) => MediaLibrary()..load(request: false),
