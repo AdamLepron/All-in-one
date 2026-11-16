@@ -1,4 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Gallery and video library -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
     <!-- Music library -->
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
     <!-- File manager: full access on Android 11+, legacy permissions before -->

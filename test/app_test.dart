@@ -5,6 +5,8 @@ import 'package:all_in_one/main.dart';
 import 'package:all_in_one/modules/files/file_ops.dart';
 import 'package:all_in_one/modules/files/files_ui.dart';
 import 'package:all_in_one/modules/files/folder_page.dart';
+import 'package:all_in_one/modules/gallery/media_grid.dart';
+import 'package:all_in_one/modules/gallery/media_library.dart';
 import 'package:all_in_one/modules/music/music_controller.dart';
 import 'package:all_in_one/modules/music/now_playing.dart';
 import 'package:all_in_one/modules/music/song.dart';
@@ -69,6 +71,7 @@ void main() {
     });
     addTearDown(() => tmp.parent.deleteSync(recursive: true));
     final music = MusicController(settings);
+    final library = MediaLibrary();
 
     /// Database and file calls hop between real I/O and the test's fake
     /// clock, so alternate between the two until loading spinners are gone.
@@ -103,6 +106,7 @@ void main() {
           ChangeNotifierProvider.value(value: notes),
           ChangeNotifierProvider.value(value: music),
           ChangeNotifierProvider(create: (_) => FilesClipboard()),
+          ChangeNotifierProvider.value(value: library),
         ],
         child: const AllInOneApp(),
       ),
@@ -192,9 +196,23 @@ void main() {
     await shot('09_search');
 
     // Music library with a song playing.
-    Song song(int id, String title, String artist, String album, int albumId, int seconds) =>
-        Song(id: id, title: title, artist: artist, album: album, albumId: albumId,
-            duration: Duration(seconds: seconds), uri: 'content://$id', track: id);
+    Song song(
+      int id,
+      String title,
+      String artist,
+      String album,
+      int albumId,
+      int seconds,
+    ) => Song(
+      id: id,
+      title: title,
+      artist: artist,
+      album: album,
+      albumId: albumId,
+      duration: Duration(seconds: seconds),
+      uri: 'content://$id',
+      track: id,
+    );
     music.debugSetLibrary([
       song(1, 'Aube', 'Les Marées', 'Rivages', 1, 214),
       song(2, 'Brume du matin', 'Les Marées', 'Rivages', 1, 187),
@@ -228,6 +246,60 @@ void main() {
     await tester.pageBack();
     await tester.pumpAndSettle();
 
+    // Gallery timeline, albums, viewer and video library.
+    final now = DateTime.now();
+    Media media(int id, int daysAgo, String album, {bool video = false}) =>
+        Media(
+          id: id,
+          video: video,
+          path: '/none/$id',
+          name: video ? 'VID_$id.mp4' : 'IMG_$id.jpg',
+          date: now.subtract(Duration(days: daysAgo, minutes: id)),
+          uri: 'content://media/$id',
+          size: video ? 48000000 : 3200000,
+          width: 4000,
+          height: 3000,
+          album: album,
+          duration: Duration(seconds: video ? 75 + id : 0),
+        );
+    library.debugSet([
+      for (var i = 1; i <= 7; i++) media(i, 0, 'Appareil photo'),
+      media(8, 0, 'Appareil photo', video: true),
+      for (var i = 9; i <= 14; i++) media(i, 1, 'Captures'),
+      for (var i = 15; i <= 22; i++) media(i, 40, 'Appareil photo'),
+      media(23, 40, 'Téléchargements', video: true),
+    ]);
+    settings.setVideoPosition('v23', const Duration(seconds: 42));
+    await tester.tap(find.text('Galerie').last);
+    await settle();
+    expect(find.text("Aujourd'hui"), findsOneWidget);
+    await shot('20_gallery');
+    await tester.longPress(find.byType(MediaThumb).first);
+    await tester.pumpAndSettle();
+    await shot('21_gallery_selection');
+    await tester.tap(find.byIcon(Icons.close));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Albums'));
+    await tester.pumpAndSettle();
+    expect(find.text('Captures'), findsOneWidget);
+    await shot('22_gallery_albums');
+    await tester.tap(find.text('Photos'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(MediaThumb).at(1));
+    await settle();
+    expect(find.text('Détails'), findsOneWidget);
+    await shot('23_viewer');
+    await tester.tap(find.byTooltip('Retour'));
+    await tester.pumpAndSettle();
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Lecteur vidéo').last);
+    await settle();
+    expect(find.text('Reprendre à 0:42'), findsOneWidget);
+    await shot('24_videos');
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
     // File manager home, then a folder with selection and trash.
     await tester.tap(find.text('Documents').first);
     await tester.pumpAndSettle();
@@ -239,8 +311,12 @@ void main() {
     await tester.pumpAndSettle();
 
     final trash = Trash('${tmp.path}/.trash');
-    Navigator.of(tester.element(find.byType(AppShell))).push(MaterialPageRoute<void>(
-        builder: (_) => FolderPage(path: tmp.path, root: tmp.path, trash: trash)));
+    Navigator.of(tester.element(find.byType(AppShell))).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            FolderPage(path: tmp.path, root: tmp.path, trash: trash),
+      ),
+    );
     await settle();
     expect(find.text('contrat.pdf'), findsOneWidget);
     await shot('16_folder');

@@ -197,6 +197,8 @@ class MusicController extends ChangeNotifier {
     playing ? player.pause() : player.play();
   }
 
+  void pause() => _player?.pause();
+
   void next() => _player?.seekToNext();
 
   /// Restarts the song, or goes to the previous one when near its start.

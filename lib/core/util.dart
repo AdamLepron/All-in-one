@@ -87,3 +87,37 @@ String formatDuration(Duration d) {
   final s = _two(d.inSeconds.remainder(60));
   return h > 0 ? '$h:${_two(m)}:$s' : '$m:$s';
 }
+
+const _fullMonths = [
+  'janvier',
+  'février',
+  'mars',
+  'avril',
+  'mai',
+  'juin',
+  'juillet',
+  'août',
+  'septembre',
+  'octobre',
+  'novembre',
+  'décembre',
+];
+
+/// Heading for a day in a timeline: "Aujourd'hui", "Hier", "12 mars",
+/// "12 mars 2024".
+String dayLabel(DateTime date) {
+  final now = DateTime.now();
+  final days = DateTime(
+    now.year,
+    now.month,
+    now.day,
+  ).difference(DateTime(date.year, date.month, date.day)).inDays;
+  if (days == 0) return "Aujourd'hui";
+  if (days == 1) return 'Hier';
+  final day = '${date.day} ${_fullMonths[date.month - 1]}';
+  return date.year == now.year ? day : '$day ${date.year}';
+}
+
+/// "12 mars 2024 à 14:05".
+String fullDate(DateTime date) =>
+    '${date.day} ${_fullMonths[date.month - 1]} ${date.year} à ${_two(date.hour)}:${_two(date.minute)}';

@@ -3,6 +3,8 @@ import 'package:material_ui/material_ui.dart';
 import '../modules/calculator/calculator_page.dart';
 import '../modules/converter/converter_page.dart';
 import '../modules/files/files_page.dart';
+import '../modules/gallery/gallery_page.dart';
+import '../modules/video/video_page.dart';
 import '../modules/music/music_page.dart';
 import '../modules/notes/notes_page.dart';
 import '../shell/coming_soon_page.dart';
@@ -37,19 +39,21 @@ class AppModule {
 
 final modules = <AppModule>[
   // Multimédia
-  const AppModule(
+  AppModule(
     'gallery',
     'Galerie',
     'Photos et vidéos',
     Icons.photo_library_rounded,
     Family.media,
+    (_) => const GalleryPage(),
   ),
-  const AppModule(
+  AppModule(
     'video',
     'Lecteur vidéo',
     'Tous formats, gestes',
     Icons.play_circle_rounded,
     Family.media,
+    (_) => const VideoPage(),
   ),
   AppModule(
     'music',

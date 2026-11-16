@@ -1,4 +1,6 @@
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import 'file_ops.dart';
 
@@ -103,4 +105,40 @@ Future<String?> askName(
     final name = value?.trim() ?? '';
     return name.isEmpty || name.contains('/') ? null : name;
   });
+}
+
+/// Makes sure the app may move and delete any file, explaining why before
+/// the system screen opens. Returns false when access is refused.
+Future<bool> ensureFullFileAccess(BuildContext context) async {
+  try {
+    if (await Permission.manageExternalStorage.isGranted ||
+        await Permission.storage.isGranted) {
+      return true;
+    }
+    if (!context.mounted) return false;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: const Text('Accès aux fichiers'),
+        content: const Text(
+          "Pour déplacer un élément dans la corbeille, l'application a besoin de l'accès à tous les fichiers. Android va ouvrir l'écran d'autorisation.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialog, true),
+            child: const Text('Continuer'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return false;
+    if (await Permission.manageExternalStorage.request().isGranted) return true;
+    return await Permission.storage.request().isGranted;
+  } on MissingPluginException {
+    return true; // not on a device (tests)
+  }
 }

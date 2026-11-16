@@ -106,6 +106,47 @@ class AppSettings extends ChangeNotifier {
   int get musicSort => (_prefs.getInt('musicSort') ?? 0).clamp(0, 2);
   set musicSort(int v) => _set(() => _prefs.setInt('musicSort', v));
 
+  // Gallery and video
+  int get galleryColumns => (_prefs.getInt('galleryColumns') ?? 4).clamp(2, 7);
+  set galleryColumns(int v) => _set(() => _prefs.setInt('galleryColumns', v));
+
+  Set<String> get favoriteMedia =>
+      (_prefs.getStringList('favoriteMedia') ?? const []).toSet();
+  bool isFavoriteMedia(String key) => favoriteMedia.contains(key);
+  void toggleFavoriteMedia(String key) {
+    final set = favoriteMedia;
+    if (!set.remove(key)) set.add(key);
+    _set(() => _prefs.setStringList('favoriteMedia', set.toList()));
+  }
+
+  /// Where each video was left, as "key:milliseconds", most recent first.
+  List<String> get _videoPositions =>
+      _prefs.getStringList('videoPositions') ?? const [];
+
+  Duration videoPosition(String key) {
+    for (final entry in _videoPositions) {
+      if (entry.startsWith('$key:')) {
+        return Duration(
+          milliseconds: int.parse(entry.substring(key.length + 1)),
+        );
+      }
+    }
+    return Duration.zero;
+  }
+
+  /// Key of the video watched last, if it was not finished.
+  String? get lastVideoKey =>
+      _videoPositions.isEmpty ? null : _videoPositions.first.split(':').first;
+
+  /// Remembers [position]; pass [Duration.zero] once the video is finished.
+  void setVideoPosition(String key, Duration position) {
+    final list = _videoPositions.where((e) => !e.startsWith('$key:')).toList();
+    if (position > Duration.zero) {
+      list.insert(0, '$key:${position.inMilliseconds}');
+    }
+    _set(() => _prefs.setStringList('videoPositions', list.take(200).toList()));
+  }
+
   void _set(Future<bool> Function() write) {
     write();
     notifyListeners();
