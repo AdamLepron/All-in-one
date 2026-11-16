@@ -56,7 +56,9 @@ void main() {
         '${await getDatabasesPath()}/notes.db',
       );
       notes = await NotesStore.open();
-      tmp = await Directory.systemTemp.createTemp('app_test');
+      // Fixed folder name: it is displayed and must not vary between runs.
+      final parent = await Directory.systemTemp.createTemp('app_test');
+      tmp = await Directory('${parent.path}/Téléphone').create();
       await Directory('${tmp.path}/Photos/Vacances').create(recursive: true);
       await Directory('${tmp.path}/Documents').create();
       await File('${tmp.path}/Documents/cv.pdf').writeAsString('x' * 2400);
@@ -65,7 +67,7 @@ void main() {
       await File('${tmp.path}/morceau.mp3').writeAsString('x' * 5200000);
       await File('${tmp.path}/archive.zip').writeAsString('x' * 1200);
     });
-    addTearDown(() => tmp.deleteSync(recursive: true));
+    addTearDown(() => tmp.parent.deleteSync(recursive: true));
     final music = MusicController(settings);
 
     /// Database and file calls hop between real I/O and the test's fake
