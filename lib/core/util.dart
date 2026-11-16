@@ -1,0 +1,56 @@
+const _months = [
+  'janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin',
+  'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.',
+];
+
+String _two(int n) => n.toString().padLeft(2, '0');
+
+/// Short French date relative to now: "À l'instant", "Il y a 5 min",
+/// "Aujourd'hui 14:05", "Hier 09:30", "12 mars", "12 mars 2024".
+String relativeDate(DateTime date) {
+  final now = DateTime.now();
+  final diff = now.difference(date);
+  if (diff.inSeconds < 60) return "À l'instant";
+  if (diff.inMinutes < 60) return 'Il y a ${diff.inMinutes} min';
+  final time = '${_two(date.hour)}:${_two(date.minute)}';
+  final days = DateTime(now.year, now.month, now.day)
+      .difference(DateTime(date.year, date.month, date.day))
+      .inDays;
+  if (days == 0) return "Aujourd'hui $time";
+  if (days == 1) return 'Hier $time';
+  final day = '${date.day} ${_months[date.month - 1]}';
+  return date.year == now.year ? day : '$day ${date.year}';
+}
+
+/// Formats a number for display: French decimal comma, thin grouping of
+/// thousands, at most [digits] significant digits, no trailing zeros.
+String formatNumber(double value, {int digits = 10}) {
+  if (value.isNaN) return 'Erreur';
+  if (value.isInfinite) return value > 0 ? '∞' : '-∞';
+  if (value == 0) return '0';
+  final abs = value.abs();
+  if (abs >= 1e15 || abs < 1e-9) {
+    // "1,5×10^21" rather than "1.5e+21": readable, and the calculator can
+    // parse it back.
+    final parts = value.toStringAsExponential(6).split('e');
+    final mantissa = parts[0]
+        .replaceFirst(RegExp(r'0+$'), '')
+        .replaceFirst(RegExp(r'\.$'), '')
+        .replaceAll('.', ',');
+    return '$mantissa×10^${int.parse(parts[1])}';
+  }
+  var s = value.toStringAsPrecision(digits);
+  if (s.contains('e')) s = value.toStringAsFixed(0);
+  if (s.contains('.')) {
+    s = s.replaceFirst(RegExp(r'0+$'), '').replaceFirst(RegExp(r'\.$'), '');
+  }
+  final parts = s.split('.');
+  final negative = parts[0].startsWith('-');
+  final intPart = negative ? parts[0].substring(1) : parts[0];
+  final buffer = StringBuffer();
+  for (var i = 0; i < intPart.length; i++) {
+    if (i > 0 && (intPart.length - i) % 3 == 0) buffer.write(' ');
+    buffer.write(intPart[i]);
+  }
+  return '${negative ? '-' : ''}$buffer${parts.length > 1 ? ',${parts[1]}' : ''}';
+}
