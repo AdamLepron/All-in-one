@@ -1,6 +1,10 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../modules/calculator/calculator_page.dart';
+import '../modules/clock/clock_page.dart';
+import '../modules/qr/qr_page.dart';
+import '../modules/recorder/recorder_page.dart';
+import '../modules/sensors/sensors_page.dart';
 import '../modules/converter/converter_page.dart';
 import '../modules/equalizer/equalizer_page.dart';
 import '../modules/files/files_page.dart';
@@ -87,12 +91,13 @@ final modules = <AppModule>[
     Icons.movie_edit,
     Family.media,
   ),
-  const AppModule(
+  AppModule(
     'recorder',
     'Enregistreur',
-    'Audio et transcription',
+    'Notes vocales',
     Icons.mic_rounded,
     Family.media,
+    (_) => const RecorderPage(),
   ),
   // Productivité
   AppModule(
@@ -164,26 +169,29 @@ final modules = <AppModule>[
     Family.tools,
     (_) => const ConverterPage(),
   ),
-  const AppModule(
+  AppModule(
     'qr',
     'Lecteur QR',
     'Codes QR et codes-barres',
     Icons.qr_code_scanner_rounded,
     Family.tools,
+    (_) => const QrPage(),
   ),
-  const AppModule(
+  AppModule(
     'clock',
     'Horloge',
-    'Alarmes et minuteurs',
+    'Minuteur, chrono, fuseaux',
     Icons.alarm_rounded,
     Family.tools,
+    (_) => const ClockPage(),
   ),
-  const AppModule(
+  AppModule(
     'sensors',
     'Outils capteurs',
-    'Lampe, boussole, niveau',
+    'Lampe, boussole, niveau, règle',
     Icons.explore_rounded,
     Family.tools,
+    (_) => const SensorsPage(),
   ),
   const AppModule(
     'cleaner',

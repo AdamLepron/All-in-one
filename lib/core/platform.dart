@@ -88,6 +88,43 @@ class MediaChannel {
     }
   }
 
+  static Future<bool> hasTorch() async => await _flag('hasTorch', const {});
+
+  /// False when the device has no flash or the camera is using it.
+  static Future<bool> setTorch(bool on) => _flag('torch', {'on': on});
+
+  /// Horizontal and vertical pixels per inch of the screen, plus the
+  /// logical density, or null off-device.
+  static Future<({double xdpi, double ydpi, double density})?> dpi() async {
+    try {
+      final m = (await _channel.invokeMapMethod<String, double>('dpi'))!;
+      return (xdpi: m['xdpi']!, ydpi: m['ydpi']!, density: m['density']!);
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
+  /// Starts or stops the default alarm sound.
+  static Future<void> ring(bool on) => _quiet('ring', {'on': on});
+
+  /// Creates an alarm in the system clock app; false if none is installed.
+  static Future<bool> setAlarm(int hour, int minute, String label) =>
+      _flag('setAlarm', {'hour': hour, 'minute': minute, 'label': label});
+
+  /// Device orientation as [azimuth, pitch, roll] in degrees.
+  static Stream<List<double>> orientation() =>
+      const EventChannel('allinone/orientation')
+          .receiveBroadcastStream()
+          .map((e) => (e as List).cast<double>());
+
+  static Future<bool> _flag(String method, Map<String, Object> args) async {
+    try {
+      return await _channel.invokeMethod<bool>(method, args) ?? false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
   static Future<double> brightness() async =>
       await _value('getBrightness') ?? 0.5;
 

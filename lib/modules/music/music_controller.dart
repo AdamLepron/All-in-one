@@ -156,7 +156,10 @@ class MusicController extends ChangeNotifier {
       artist: s.artist,
       album: s.album,
       duration: s.duration,
-      artUri: Uri.parse('content://media/external/audio/albumart/${s.albumId}'),
+      // Files outside the media library (recordings) have no cover.
+      artUri: s.albumId < 0
+          ? null
+          : Uri.parse('content://media/external/audio/albumart/${s.albumId}'),
     ),
   );
 

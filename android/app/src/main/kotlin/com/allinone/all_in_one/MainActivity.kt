@@ -16,6 +16,7 @@ import android.util.Size
 import android.view.WindowManager
 import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.io.ByteArrayOutputStream
@@ -30,9 +31,12 @@ class MainActivity : AudioServiceActivity() {
     private val main = Handler(Looper.getMainLooper())
     private val pdf = PdfDocuments()
     private val effects = AudioEffects()
+    private val tools by lazy { DeviceTools(this) }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        EventChannel(flutterEngine.dartExecutor.binaryMessenger, "allinone/orientation")
+            .setStreamHandler(tools)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "allinone/media")
             .setMethodCallHandler { call, result ->
                 // Window and volume calls are instant and need the UI thread.
@@ -121,6 +125,20 @@ class MainActivity : AudioServiceActivity() {
                     call.argument<Double>("widening") ?: 0.0,
                     call.argument<Double>("gain") ?: 0.0,
                     call.argument<Double>("balance") ?: 0.0,
+                )
+            )
+            "hasTorch" -> result.success(tools.hasTorch())
+            "torch" -> result.success(tools.setTorch(call.argument<Boolean>("on") == true))
+            "dpi" -> result.success(tools.dpi())
+            "ring" -> {
+                if (call.argument<Boolean>("on") == true) tools.ring() else tools.stopRing()
+                result.success(null)
+            }
+            "setAlarm" -> result.success(
+                tools.setAlarm(
+                    call.argument<Int>("hour")!!,
+                    call.argument<Int>("minute")!!,
+                    call.argument<String>("label") ?: "",
                 )
             )
             "keepScreenOn" -> {
@@ -283,6 +301,7 @@ class MainActivity : AudioServiceActivity() {
     }
 
     override fun onDestroy() {
+        tools.release()
         effects.release()
         pdf.closeAll()
         executor.shutdown()

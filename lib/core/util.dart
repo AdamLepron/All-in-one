@@ -121,3 +121,17 @@ String dayLabel(DateTime date) {
 /// "12 mars 2024 à 14:05".
 String fullDate(DateTime date) =>
     '${date.day} ${_fullMonths[date.month - 1]} ${date.year} à ${_two(date.hour)}:${_two(date.minute)}';
+
+const _weekdays = [
+  'lundi',
+  'mardi',
+  'mercredi',
+  'jeudi',
+  'vendredi',
+  'samedi',
+  'dimanche',
+];
+
+/// "lundi 16 novembre".
+String dayLabelLong(DateTime date) =>
+    '${_weekdays[date.weekday - 1]} ${date.day} ${_fullMonths[date.month - 1]}';

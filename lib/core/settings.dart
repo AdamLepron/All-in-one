@@ -150,6 +150,10 @@ class AppSettings extends ChangeNotifier {
     WidgetsBinding.instance.addPostFrameCallback((_) => notifyListeners());
   }
 
+  List<String> list(String key) => _prefs.getStringList(key) ?? const [];
+  void setList(String key, List<String> value) =>
+      _set(() => _prefs.setStringList(key, value));
+
   /// Free-form storage for modules that serialise their own state.
   String? raw(String key) => _prefs.getString(key);
   void setRaw(String key, String value) =>

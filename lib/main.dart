@@ -6,11 +6,13 @@ import 'core/theme.dart';
 
 import 'package:just_audio_background/just_audio_background.dart';
 
+import 'modules/clock/clock_controller.dart';
 import 'modules/equalizer/equalizer_controller.dart';
 import 'modules/files/files_ui.dart';
 import 'modules/gallery/media_library.dart';
 import 'modules/music/music_controller.dart';
 import 'modules/notes/notes_store.dart';
+import 'modules/recorder/recorder_controller.dart';
 import 'shell/app_shell.dart';
 
 Future<void> main() async {
@@ -36,6 +38,8 @@ Future<void> main() async {
           lazy: false,
         ),
         ChangeNotifierProvider(create: (_) => FilesClipboard()),
+        ChangeNotifierProvider(create: (_) => ClockController()),
+        ChangeNotifierProvider(create: (_) => RecorderController()),
         ChangeNotifierProvider(
           create: (_) => MediaLibrary()..load(request: false),
         ),

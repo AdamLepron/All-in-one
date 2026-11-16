@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:all_in_one/core/settings.dart';
 import 'package:all_in_one/main.dart';
+import 'package:all_in_one/modules/clock/clock_controller.dart';
+import 'package:all_in_one/modules/clock/clock_page.dart';
 import 'package:all_in_one/modules/equalizer/equalizer_controller.dart';
 import 'package:all_in_one/modules/files/file_ops.dart';
 import 'package:all_in_one/modules/files/files_ui.dart';
@@ -12,6 +14,10 @@ import 'package:all_in_one/modules/music/music_controller.dart';
 import 'package:all_in_one/modules/music/now_playing.dart';
 import 'package:all_in_one/modules/music/song.dart';
 import 'package:all_in_one/modules/notes/notes_store.dart';
+import 'package:all_in_one/modules/qr/qr_page.dart';
+import 'package:all_in_one/modules/recorder/recorder_controller.dart';
+import 'package:all_in_one/modules/recorder/recorder_page.dart';
+import 'package:all_in_one/modules/sensors/sensors_page.dart';
 import 'package:all_in_one/modules/reader/reader_page.dart';
 import 'package:all_in_one/shell/app_shell.dart';
 import 'package:flutter/services.dart';
@@ -74,6 +80,14 @@ void main() {
       );
       await File('${tmp.path}/Documents/rapport.docx')
           .writeAsString('x' * 64000);
+      await Directory('${parent.path}/recordings').create();
+      await File('${parent.path}/recordings/Idée de refrain.m4a')
+          .writeAsString('x' * 310000);
+      await File('${parent.path}/recordings/Réunion du lundi.m4a')
+          .writeAsString('x' * 2400000);
+      await File('${parent.path}/recordings/index.json').writeAsString(
+        '{"Idée de refrain.m4a": 38000, "Réunion du lundi.m4a": 1265000}',
+      );
       await File('${tmp.path}/archive.zip').writeAsString('x' * 1200);
     });
     addTearDown(() => tmp.parent.deleteSync(recursive: true));
@@ -122,6 +136,12 @@ void main() {
             create: (_) => EqualizerController(settings, music),
           ),
           ChangeNotifierProvider(create: (_) => FilesClipboard()),
+          ChangeNotifierProvider(create: (_) => ClockController()),
+          ChangeNotifierProvider(
+            create: (_) => RecorderController(
+              directory: () async => '${tmp.parent.path}/recordings',
+            ),
+          ),
           ChangeNotifierProvider.value(value: library),
         ],
         child: const AllInOneApp(),
@@ -402,6 +422,59 @@ void main() {
     await shot('27_equalizer');
     await tester.pageBack();
     await tester.pumpAndSettle();
+
+    // Step 5 tools, each opened directly.
+    Future<void> open(Widget page) async {
+      Navigator.of(tester.element(find.byType(AppShell)))
+          .push(MaterialPageRoute<void>(builder: (_) => page));
+      await settle();
+    }
+
+    Future<void> close() async {
+      await tester.pageBack();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 500));
+    }
+
+    await open(const QrPage(initialTab: 1));
+    await tester.enterText(
+      find.byType(TextField).first,
+      'https://exemple.fr/menu',
+    );
+    await tester.pumpAndSettle();
+    expect(find.text("Partager l'image"), findsOneWidget);
+    await shot('28_qr_create');
+    await close();
+
+    await open(const ClockPage());
+    expect(find.text('Dans le monde'), findsOneWidget);
+    expect(find.text('Tokyo'), findsOneWidget);
+    await shot('29_clock');
+    await tester.tap(find.text('Minuteur'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('10 min'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('10:00'), findsOneWidget);
+    await shot('30_timer');
+    await tester.tap(find.text('Chronomètre'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('00:00,00'), findsOneWidget);
+    await shot('31_stopwatch');
+    await close();
+
+    await open(const SensorsPage());
+    expect(find.text('Éteinte'), findsOneWidget);
+    await shot('32_torch');
+    await tester.tap(find.text('Règle'));
+    await settle();
+    await shot('33_ruler');
+    await close();
+
+    await open(const RecorderPage());
+    expect(find.text('Réunion du lundi'), findsOneWidget);
+    expect(find.textContaining('21:05'), findsOneWidget);
+    await shot('34_recorder');
+    await close();
 
     // Dark AMOLED theme.
     settings
