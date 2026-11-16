@@ -13,11 +13,15 @@ class SettingsPage extends StatelessWidget {
     final text = Theme.of(context).textTheme;
 
     Widget label(String s) => Padding(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 10),
-          child: Text(s,
-              style: text.titleSmall?.copyWith(
-                  color: scheme.primary, fontWeight: FontWeight.w700)),
-        );
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 10),
+      child: Text(
+        s,
+        style: text.titleSmall?.copyWith(
+          color: scheme.primary,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
 
     return Scaffold(
       appBar: AppBar(title: const Text('Réglages')),
@@ -85,7 +89,7 @@ class SettingsPage extends StatelessWidget {
           const ListTile(
             leading: Icon(Icons.info_outline),
             title: Text('All-in-One'),
-            subtitle: Text('Version 0.1.0 · Étape 1 : fondations'),
+            subtitle: Text('Version 0.2.0 · Étape 2 : fichiers et musique'),
           ),
         ],
       ),

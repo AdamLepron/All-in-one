@@ -21,13 +21,15 @@ Color noteBackground(BuildContext context, int index) {
   final scheme = Theme.of(context).colorScheme;
   final tint = noteColors[index.clamp(0, noteColors.length - 1)];
   if (tint == null) return scheme.surfaceContainer;
-  return Color.alphaBlend(tint.withValues(alpha: 0.22), scheme.surfaceContainer);
+  return Color.alphaBlend(
+    tint.withValues(alpha: 0.22),
+    scheme.surfaceContainer,
+  );
 }
 
 void openNote(BuildContext context, [Note? note]) {
-  Navigator.of(context).push(
-    MaterialPageRoute(builder: (_) => NoteEditorPage(note: note)),
-  );
+  Navigator.of(context)
+      .push(MaterialPageRoute(builder: (_) => NoteEditorPage(note: note)));
 }
 
 void deleteNoteWithUndo(BuildContext context, Note note) {
@@ -36,11 +38,16 @@ void deleteNoteWithUndo(BuildContext context, Note note) {
   store.delete(note);
   messenger
     ..clearSnackBars()
-    ..showSnackBar(SnackBar(
-      content: const Text('Note supprimée'),
-      duration: const Duration(seconds: 5),
-      action: SnackBarAction(label: 'Annuler', onPressed: () => store.restore(note)),
-    ));
+    ..showSnackBar(
+      SnackBar(
+        content: const Text('Note supprimée'),
+        duration: const Duration(seconds: 5),
+        action: SnackBarAction(
+          label: 'Annuler',
+          onPressed: () => store.restore(note),
+        ),
+      ),
+    );
 }
 
 class NotesPage extends StatefulWidget {
@@ -64,10 +71,14 @@ class _NotesPageState extends State<NotesPage> {
         title: const Text('Notes'),
         actions: [
           IconButton(
-            tooltip: settings.notesGrid ? 'Afficher en liste' : 'Afficher en grille',
-            icon: Icon(settings.notesGrid
-                ? Icons.view_agenda_outlined
-                : Icons.grid_view_rounded),
+            tooltip: settings.notesGrid
+                ? 'Afficher en liste'
+                : 'Afficher en grille',
+            icon: Icon(
+              settings.notesGrid
+                  ? Icons.view_agenda_outlined
+                  : Icons.grid_view_rounded,
+            ),
             onPressed: () => settings.notesGrid = !settings.notesGrid,
           ),
         ],
@@ -113,11 +124,16 @@ class _EmptyNotes extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(searching ? Icons.search_off : Icons.sticky_note_2_outlined,
-                size: 64, color: scheme.outline),
+            Icon(
+              searching ? Icons.search_off : Icons.sticky_note_2_outlined,
+              size: 64,
+              color: scheme.outline,
+            ),
             const SizedBox(height: 16),
             Text(
-              searching ? 'Aucune note ne correspond' : 'Aucune note pour le moment',
+              searching
+                  ? 'Aucune note ne correspond'
+                  : 'Aucune note pour le moment',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             if (!searching) ...[
@@ -209,7 +225,9 @@ class NoteCard extends StatelessWidget {
                       note.title.isEmpty ? 'Sans titre' : note.title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: text.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                      style: text.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                   if (note.pinned)
@@ -218,14 +236,20 @@ class NoteCard extends StatelessWidget {
               ),
               if (note.body.isNotEmpty) ...[
                 const SizedBox(height: 6),
-                Text(note.body,
-                    maxLines: maxLines,
-                    overflow: TextOverflow.ellipsis,
-                    style: text.bodyMedium),
+                Text(
+                  note.body,
+                  maxLines: maxLines,
+                  overflow: TextOverflow.ellipsis,
+                  style: text.bodyMedium,
+                ),
               ],
               const SizedBox(height: 10),
-              Text(relativeDate(note.updatedAt),
-                  style: text.labelSmall?.copyWith(color: scheme.onSurfaceVariant)),
+              Text(
+                relativeDate(note.updatedAt),
+                style: text.labelSmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
             ],
           ),
         ),
@@ -242,7 +266,9 @@ class NoteCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: Icon(note.pinned ? Icons.push_pin_outlined : Icons.push_pin),
+              leading: Icon(
+                note.pinned ? Icons.push_pin_outlined : Icons.push_pin,
+              ),
               title: Text(note.pinned ? 'Désépingler' : 'Épingler'),
               onTap: () {
                 Navigator.pop(sheet);

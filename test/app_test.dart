@@ -2,7 +2,14 @@ import 'dart:io';
 
 import 'package:all_in_one/core/settings.dart';
 import 'package:all_in_one/main.dart';
+import 'package:all_in_one/modules/files/file_ops.dart';
+import 'package:all_in_one/modules/files/files_ui.dart';
+import 'package:all_in_one/modules/files/folder_page.dart';
+import 'package:all_in_one/modules/music/music_controller.dart';
+import 'package:all_in_one/modules/music/now_playing.dart';
+import 'package:all_in_one/modules/music/song.dart';
 import 'package:all_in_one/modules/notes/notes_store.dart';
+import 'package:all_in_one/shell/app_shell.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -12,7 +19,8 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 /// Loads the real Roboto and Material Icons fonts so screenshots are readable.
 Future<void> loadFonts() async {
-  final root = Platform.environment['FLUTTER_ROOT'] ??
+  final root =
+      Platform.environment['FLUTTER_ROOT'] ??
       File(Platform.resolvedExecutable).parent.parent.parent.parent.parent.path;
   final dir = '$root/bin/cache/artifacts/material_fonts';
   if (!Directory(dir).existsSync()) return;
@@ -23,7 +31,9 @@ Future<void> loadFonts() async {
     roboto.addFont(read('Roboto-$f.ttf'));
   }
   await roboto.load();
-  await (FontLoader('MaterialIcons')..addFont(read('MaterialIcons-Regular.otf'))).load();
+  await (FontLoader(
+    'MaterialIcons',
+  )..addFont(read('MaterialIcons-Regular.otf'))).load();
 }
 
 void main() {
@@ -37,32 +47,64 @@ void main() {
 
     late AppSettings settings;
     late NotesStore notes;
+    late Directory tmp;
     await tester.runAsync(() async {
       await loadFonts();
       SharedPreferences.setMockInitialValues({});
       settings = await AppSettings.load();
-      await databaseFactory.deleteDatabase('${await getDatabasesPath()}/notes.db');
+      await databaseFactory.deleteDatabase(
+        '${await getDatabasesPath()}/notes.db',
+      );
       notes = await NotesStore.open();
+      tmp = await Directory.systemTemp.createTemp('app_test');
+      await Directory('${tmp.path}/Photos/Vacances').create(recursive: true);
+      await Directory('${tmp.path}/Documents').create();
+      await File('${tmp.path}/Documents/cv.pdf').writeAsString('x' * 2400);
+      await File('${tmp.path}/contrat.pdf').writeAsString('x' * 184000);
+      await File('${tmp.path}/photo.jpg').writeAsString('x' * 2400000);
+      await File('${tmp.path}/morceau.mp3').writeAsString('x' * 5200000);
+      await File('${tmp.path}/archive.zip').writeAsString('x' * 1200);
     });
+    addTearDown(() => tmp.deleteSync(recursive: true));
+    final music = MusicController(settings);
 
+    /// Database and file calls hop between real I/O and the test's fake
+    /// clock, so alternate between the two until loading spinners are gone.
     Future<void> settle() async {
-      // Database calls hop between real I/O and the test's fake clock.
-      for (var i = 0; i < 4; i++) {
-        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
-        await tester.pumpAndSettle();
+      var idle = 0;
+      for (var i = 0; i < 200 && idle < 40; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+        await tester.pump(const Duration(milliseconds: 100));
+        final loading =
+            find.byType(CircularProgressIndicator).evaluate().isNotEmpty ||
+            tester
+                .widgetList<LinearProgressIndicator>(
+                  find.byType(LinearProgressIndicator),
+                )
+                .any((bar) => bar.value == null);
+        idle = loading ? 0 : idle + 1;
       }
+      await tester.pumpAndSettle();
     }
 
     Future<void> shot(String name) => expectLater(
-        find.byType(AllInOneApp), matchesGoldenFile('screenshots/$name.png'));
+      find.byType(AllInOneApp),
+      matchesGoldenFile('screenshots/$name.png'),
+    );
 
-    await tester.pumpWidget(MultiProvider(
-      providers: [
-        ChangeNotifierProvider.value(value: settings),
-        ChangeNotifierProvider.value(value: notes),
-      ],
-      child: const AllInOneApp(),
-    ));
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider.value(value: settings),
+          ChangeNotifierProvider.value(value: notes),
+          ChangeNotifierProvider.value(value: music),
+          ChangeNotifierProvider(create: (_) => FilesClipboard()),
+        ],
+        child: const AllInOneApp(),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(find.text('Raccourcis'), findsOneWidget);
     await shot('01_home_empty');
@@ -81,8 +123,21 @@ void main() {
     expect(notes.notes.single.title, 'Courses');
 
     await tester.runAsync(() async {
-      await notes.save(Note(title: 'Idées projet', body: 'Lecteur de musique avec mini-lecteur persistant, égaliseur par casque.', color: 5));
-      await notes.save(Note(title: 'Réunion lundi', body: 'Préparer la démo\nEnvoyer le compte rendu', color: 3, pinned: true));
+      await notes.save(
+        Note(
+          title: 'Idées projet',
+          body: 'Lecteur de musique avec mini-lecteur persistant, égaliseur par casque.',
+          color: 5,
+        ),
+      );
+      await notes.save(
+        Note(
+          title: 'Réunion lundi',
+          body: 'Préparer la démo\nEnvoyer le compte rendu',
+          color: 3,
+          pinned: true,
+        ),
+      );
     });
     await tester.pumpAndSettle();
     expect(find.text('Reprendre'), findsOneWidget);
@@ -134,6 +189,89 @@ void main() {
     expect(find.text('Idées projet'), findsOneWidget);
     await shot('09_search');
 
+    // Music library with a song playing.
+    Song song(int id, String title, String artist, String album, int albumId, int seconds) =>
+        Song(id: id, title: title, artist: artist, album: album, albumId: albumId,
+            duration: Duration(seconds: seconds), uri: 'content://$id', track: id);
+    music.debugSetLibrary([
+      song(1, 'Aube', 'Les Marées', 'Rivages', 1, 214),
+      song(2, 'Brume du matin', 'Les Marées', 'Rivages', 1, 187),
+      song(3, 'Cap au nord', 'Nova Lune', 'Boréal', 2, 251),
+      song(4, 'Derniers feux', 'Nova Lune', 'Boréal', 2, 198),
+      song(5, 'Écume', 'Les Marées', 'Rivages', 1, 233),
+      song(6, 'Fragments', 'Atelier Sud', 'Esquisses', 3, 176),
+    ], playingIndex: 2);
+    settings.toggleFavorite(3);
+    await tester.tap(find.text('Médias'));
+    await tester.pumpAndSettle();
+    await shot('10_media_with_player');
+    await tester.tap(find.text('Musique').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Cap au nord'), findsWidgets);
+    await shot('11_music');
+    await tester.tap(find.text('Albums'));
+    await tester.pumpAndSettle();
+    await shot('12_music_albums');
+    await tester.tap(find.text('Boréal'));
+    await tester.pumpAndSettle();
+    await shot('13_music_album');
+    showNowPlaying(tester.element(find.byType(Scaffold).last));
+    await tester.pumpAndSettle();
+    expect(find.text('LECTURE EN COURS'), findsOneWidget);
+    await shot('14_now_playing');
+    await tester.tap(find.byTooltip('Réduire'));
+    await tester.pumpAndSettle();
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    // File manager home, then a folder with selection and trash.
+    await tester.tap(find.text('Documents').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Fichiers'));
+    await settle();
+    expect(find.text('Accès rapide'), findsOneWidget);
+    await shot('15_files_home');
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    final trash = Trash('${tmp.path}/.trash');
+    Navigator.of(tester.element(find.byType(AppShell))).push(MaterialPageRoute<void>(
+        builder: (_) => FolderPage(path: tmp.path, root: tmp.path, trash: trash)));
+    await settle();
+    expect(find.text('contrat.pdf'), findsOneWidget);
+    await shot('16_folder');
+    await tester.longPress(find.text('contrat.pdf'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('archive.zip'));
+    await tester.pumpAndSettle();
+    await shot('17_folder_selection');
+    await tester.tap(find.byTooltip('Supprimer'));
+    await settle();
+    expect(find.text('contrat.pdf'), findsNothing);
+    expect(find.text('2 éléments déplacés dans la corbeille'), findsOneWidget);
+    await tester.tap(find.text('Annuler'));
+    await settle();
+    expect(find.text('contrat.pdf'), findsOneWidget);
+
+    // Copy a file into a sub-folder.
+    await tester.longPress(find.text('photo.jpg'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Copier'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Photos'));
+    await settle();
+    await shot('18_folder_paste');
+    await tester.tap(find.text('Coller ici'));
+    await settle();
+    expect(File('${tmp.path}/Photos/photo.jpg').existsSync(), true);
+    expect(find.text('photo.jpg'), findsOneWidget);
+    await tester.pageBack();
+    await settle();
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
     // Dark AMOLED theme.
     settings
       ..themeMode = ThemeMode.dark
@@ -141,6 +279,6 @@ void main() {
       ..accentIndex = 1;
     await tester.tap(find.text('Accueil'));
     await tester.pumpAndSettle();
-    await shot('10_home_dark');
+    await shot('19_home_dark');
   });
 }

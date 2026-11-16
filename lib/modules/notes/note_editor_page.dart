@@ -57,8 +57,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     super.dispose();
   }
 
-  int get _wordCount =>
-      _body.text.trim().isEmpty ? 0 : _body.text.trim().split(RegExp(r'\s+')).length;
+  int get _wordCount => _body.text.trim().isEmpty
+      ? 0
+      : _body.text.trim().split(RegExp(r'\s+')).length;
 
   @override
   Widget build(BuildContext context) {
@@ -111,7 +112,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                     textCapitalization: TextCapitalization.sentences,
                     textInputAction: TextInputAction.next,
                     maxLines: null,
-                    style: text.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+                    style: text.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                     decoration: const InputDecoration(
                       hintText: 'Titre',
                       filled: false,
@@ -145,12 +148,16 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                 children: [
                   Text(
                     'Modifiée ${relativeDate(_note.updatedAt).toLowerCase()}',
-                    style: text.labelSmall?.copyWith(color: scheme.onSurfaceVariant),
+                    style: text.labelSmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
                   const Spacer(),
                   Text(
                     '$_wordCount mot${_wordCount > 1 ? 's' : ''} · ${_body.text.length} caractères',
-                    style: text.labelSmall?.copyWith(color: scheme.onSurfaceVariant),
+                    style: text.labelSmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
                 ],
               ),
@@ -192,7 +199,10 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                       ),
                     ),
                     child: i == 0
-                        ? const Icon(Icons.format_color_reset_outlined, size: 18)
+                        ? const Icon(
+                            Icons.format_color_reset_outlined,
+                            size: 18,
+                          )
                         : null,
                   ),
                 ),

@@ -24,22 +24,22 @@ class Note {
   bool get isEmpty => title.trim().isEmpty && body.trim().isEmpty;
 
   Map<String, Object?> toMap() => {
-        'id': id,
-        'title': title,
-        'body': body,
-        'color': color,
-        'pinned': pinned ? 1 : 0,
-        'updated_at': updatedAt.millisecondsSinceEpoch,
-      };
+    'id': id,
+    'title': title,
+    'body': body,
+    'color': color,
+    'pinned': pinned ? 1 : 0,
+    'updated_at': updatedAt.millisecondsSinceEpoch,
+  };
 
   static Note fromMap(Map<String, Object?> m) => Note(
-        id: m['id'] as int,
-        title: m['title'] as String,
-        body: m['body'] as String,
-        color: m['color'] as int,
-        pinned: m['pinned'] == 1,
-        updatedAt: DateTime.fromMillisecondsSinceEpoch(m['updated_at'] as int),
-      );
+    id: m['id'] as int,
+    title: m['title'] as String,
+    body: m['body'] as String,
+    color: m['color'] as int,
+    pinned: m['pinned'] == 1,
+    updatedAt: DateTime.fromMillisecondsSinceEpoch(m['updated_at'] as int),
+  );
 }
 
 /// Notes persisted in a local SQLite database, kept in memory for instant
@@ -69,7 +69,10 @@ class NotesStore extends ChangeNotifier {
   }
 
   Future<void> _reload() async {
-    final rows = await _db.query('notes', orderBy: 'pinned DESC, updated_at DESC');
+    final rows = await _db.query(
+      'notes',
+      orderBy: 'pinned DESC, updated_at DESC',
+    );
     _notes = rows.map(Note.fromMap).toList();
     notifyListeners();
   }
@@ -84,7 +87,12 @@ class NotesStore extends ChangeNotifier {
     if (note.id == null) {
       note.id = await _db.insert('notes', note.toMap()..remove('id'));
     } else {
-      await _db.update('notes', note.toMap(), where: 'id = ?', whereArgs: [note.id]);
+      await _db.update(
+        'notes',
+        note.toMap(),
+        where: 'id = ?',
+        whereArgs: [note.id],
+      );
     }
     await _reload();
   }
@@ -96,8 +104,11 @@ class NotesStore extends ChangeNotifier {
 
   /// Puts back a note removed with [delete], keeping its id and date.
   Future<void> restore(Note note) async {
-    await _db.insert('notes', note.toMap(),
-        conflictAlgorithm: ConflictAlgorithm.replace);
+    await _db.insert(
+      'notes',
+      note.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
     await _reload();
   }
 
@@ -105,8 +116,11 @@ class NotesStore extends ChangeNotifier {
     final q = query.trim().toLowerCase();
     if (q.isEmpty) return const [];
     return _notes
-        .where((n) =>
-            n.title.toLowerCase().contains(q) || n.body.toLowerCase().contains(q))
+        .where(
+          (n) =>
+              n.title.toLowerCase().contains(q) ||
+              n.body.toLowerCase().contains(q),
+        )
         .toList();
   }
 }

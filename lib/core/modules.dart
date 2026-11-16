@@ -2,14 +2,22 @@ import 'package:material_ui/material_ui.dart';
 
 import '../modules/calculator/calculator_page.dart';
 import '../modules/converter/converter_page.dart';
+import '../modules/files/files_page.dart';
+import '../modules/music/music_page.dart';
 import '../modules/notes/notes_page.dart';
 import '../shell/coming_soon_page.dart';
 import 'theme.dart';
 
 /// One entry of the application catalogue.
 class AppModule {
-  const AppModule(this.id, this.name, this.description, this.icon, this.family,
-      [this.builder]);
+  const AppModule(
+    this.id,
+    this.name,
+    this.description,
+    this.icon,
+    this.family, [
+    this.builder,
+  ]);
 
   final String id;
   final String name;
@@ -23,37 +31,166 @@ class AppModule {
   bool get available => builder != null;
 
   void open(BuildContext context) => Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: builder ?? (_) => ComingSoonPage(module: this),
-        ),
-      );
+    MaterialPageRoute(builder: builder ?? (_) => ComingSoonPage(module: this)),
+  );
 }
 
 final modules = <AppModule>[
   // Multimédia
-  const AppModule('gallery', 'Galerie', 'Photos et vidéos', Icons.photo_library_rounded, Family.media),
-  const AppModule('video', 'Lecteur vidéo', 'Tous formats, gestes', Icons.play_circle_rounded, Family.media),
-  const AppModule('music', 'Musique', 'Bibliothèque et playlists', Icons.music_note_rounded, Family.media),
-  const AppModule('equalizer', 'Égaliseur', 'Balance et effets sonores', Icons.equalizer_rounded, Family.media),
-  const AppModule('photo_editor', 'Éditeur photo', 'Retouche et filtres', Icons.auto_fix_high_rounded, Family.media),
-  const AppModule('video_editor', 'Éditeur vidéo', 'Montage multipiste', Icons.movie_edit, Family.media),
-  const AppModule('recorder', 'Enregistreur', 'Audio et transcription', Icons.mic_rounded, Family.media),
+  const AppModule(
+    'gallery',
+    'Galerie',
+    'Photos et vidéos',
+    Icons.photo_library_rounded,
+    Family.media,
+  ),
+  const AppModule(
+    'video',
+    'Lecteur vidéo',
+    'Tous formats, gestes',
+    Icons.play_circle_rounded,
+    Family.media,
+  ),
+  AppModule(
+    'music',
+    'Musique',
+    'Votre bibliothèque audio',
+    Icons.music_note_rounded,
+    Family.media,
+    (_) => const MusicPage(),
+  ),
+  const AppModule(
+    'equalizer',
+    'Égaliseur',
+    'Balance et effets sonores',
+    Icons.equalizer_rounded,
+    Family.media,
+  ),
+  const AppModule(
+    'photo_editor',
+    'Éditeur photo',
+    'Retouche et filtres',
+    Icons.auto_fix_high_rounded,
+    Family.media,
+  ),
+  const AppModule(
+    'video_editor',
+    'Éditeur vidéo',
+    'Montage multipiste',
+    Icons.movie_edit,
+    Family.media,
+  ),
+  const AppModule(
+    'recorder',
+    'Enregistreur',
+    'Audio et transcription',
+    Icons.mic_rounded,
+    Family.media,
+  ),
   // Productivité
-  const AppModule('files', 'Fichiers', 'Stockage et dossiers', Icons.folder_rounded, Family.productivity),
-  const AppModule('reader', 'Lecteur de documents', 'PDF, Office, livres', Icons.menu_book_rounded, Family.productivity),
-  const AppModule('doc_editor', 'Éditeur de documents', 'Texte, tableur, diapos', Icons.edit_document, Family.productivity),
-  AppModule('notes', 'Notes', 'Bloc-notes rapide', Icons.sticky_note_2_rounded, Family.productivity, (_) => const NotesPage()),
-  const AppModule('scanner', 'Scanner', 'Documents et OCR', Icons.document_scanner_rounded, Family.productivity),
-  const AppModule('tasks', 'Tâches', 'Listes et rappels', Icons.check_circle_rounded, Family.productivity),
-  const AppModule('calendar', 'Agenda', 'Événements', Icons.calendar_month_rounded, Family.productivity),
+  AppModule(
+    'files',
+    'Fichiers',
+    'Stockage et dossiers',
+    Icons.folder_rounded,
+    Family.productivity,
+    (_) => const FilesPage(),
+  ),
+  const AppModule(
+    'reader',
+    'Lecteur de documents',
+    'PDF, Office, livres',
+    Icons.menu_book_rounded,
+    Family.productivity,
+  ),
+  const AppModule(
+    'doc_editor',
+    'Éditeur de documents',
+    'Texte, tableur, diapos',
+    Icons.edit_document,
+    Family.productivity,
+  ),
+  AppModule(
+    'notes',
+    'Notes',
+    'Bloc-notes rapide',
+    Icons.sticky_note_2_rounded,
+    Family.productivity,
+    (_) => const NotesPage(),
+  ),
+  const AppModule(
+    'scanner',
+    'Scanner',
+    'Documents et OCR',
+    Icons.document_scanner_rounded,
+    Family.productivity,
+  ),
+  const AppModule(
+    'tasks',
+    'Tâches',
+    'Listes et rappels',
+    Icons.check_circle_rounded,
+    Family.productivity,
+  ),
+  const AppModule(
+    'calendar',
+    'Agenda',
+    'Événements',
+    Icons.calendar_month_rounded,
+    Family.productivity,
+  ),
   // Utilitaires
-  AppModule('calculator', 'Calculatrice', 'Standard et scientifique', Icons.calculate_rounded, Family.tools, (_) => const CalculatorPage()),
-  AppModule('converter', 'Convertisseur', 'Unités et mesures', Icons.swap_horiz_rounded, Family.tools, (_) => const ConverterPage()),
-  const AppModule('qr', 'Lecteur QR', 'Codes QR et codes-barres', Icons.qr_code_scanner_rounded, Family.tools),
-  const AppModule('clock', 'Horloge', 'Alarmes et minuteurs', Icons.alarm_rounded, Family.tools),
-  const AppModule('sensors', 'Outils capteurs', 'Lampe, boussole, niveau', Icons.explore_rounded, Family.tools),
-  const AppModule('cleaner', 'Nettoyeur', 'Libérer du stockage', Icons.cleaning_services_rounded, Family.tools),
-  const AppModule('transfer', 'Transfert local', 'Envoi entre appareils', Icons.wifi_tethering_rounded, Family.tools),
+  AppModule(
+    'calculator',
+    'Calculatrice',
+    'Standard et scientifique',
+    Icons.calculate_rounded,
+    Family.tools,
+    (_) => const CalculatorPage(),
+  ),
+  AppModule(
+    'converter',
+    'Convertisseur',
+    'Unités et mesures',
+    Icons.swap_horiz_rounded,
+    Family.tools,
+    (_) => const ConverterPage(),
+  ),
+  const AppModule(
+    'qr',
+    'Lecteur QR',
+    'Codes QR et codes-barres',
+    Icons.qr_code_scanner_rounded,
+    Family.tools,
+  ),
+  const AppModule(
+    'clock',
+    'Horloge',
+    'Alarmes et minuteurs',
+    Icons.alarm_rounded,
+    Family.tools,
+  ),
+  const AppModule(
+    'sensors',
+    'Outils capteurs',
+    'Lampe, boussole, niveau',
+    Icons.explore_rounded,
+    Family.tools,
+  ),
+  const AppModule(
+    'cleaner',
+    'Nettoyeur',
+    'Libérer du stockage',
+    Icons.cleaning_services_rounded,
+    Family.tools,
+  ),
+  const AppModule(
+    'transfer',
+    'Transfert local',
+    'Envoi entre appareils',
+    Icons.wifi_tethering_rounded,
+    Family.tools,
+  ),
 ];
 
 AppModule moduleById(String id) => modules.firstWhere((m) => m.id == id);

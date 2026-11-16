@@ -23,8 +23,7 @@ class HomePage extends StatelessWidget {
     final settings = context.watch<AppSettings>();
     final notes = context.watch<NotesStore>().notes;
     final pinned = [
-      for (final id in settings.pinned)
-        ...modules.where((m) => m.id == id),
+      for (final id in settings.pinned) ...modules.where((m) => m.id == id),
     ];
 
     return Scaffold(
@@ -34,9 +33,8 @@ class HomePage extends StatelessWidget {
           IconButton(
             tooltip: 'Réglages',
             icon: const Icon(Icons.settings_outlined),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const SettingsPage()),
-            ),
+            onPressed: () => Navigator.of(context)
+                .push(MaterialPageRoute(builder: (_) => const SettingsPage())),
           ),
         ],
       ),
@@ -47,9 +45,11 @@ class HomePage extends StatelessWidget {
             const SectionTitle('Reprendre'),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: _ResumeCard(note: notes.reduce(
-                (a, b) => a.updatedAt.isAfter(b.updatedAt) ? a : b,
-              )),
+              child: _ResumeCard(
+                note: notes.reduce(
+                  (a, b) => a.updatedAt.isAfter(b.updatedAt) ? a : b,
+                ),
+              ),
             ),
           ],
           const SectionTitle('Raccourcis'),
@@ -136,16 +136,22 @@ class _ResumeCard extends StatelessWidget {
             padding: const EdgeInsets.all(18),
             child: Row(
               children: [
-                Icon(Icons.sticky_note_2_rounded,
-                    size: 36, color: scheme.onPrimaryContainer),
+                Icon(
+                  Icons.sticky_note_2_rounded,
+                  size: 36,
+                  color: scheme.onPrimaryContainer,
+                ),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Dernière note modifiée',
-                          style: text.labelMedium
-                              ?.copyWith(color: scheme.onPrimaryContainer)),
+                      Text(
+                        'Dernière note modifiée',
+                        style: text.labelMedium?.copyWith(
+                          color: scheme.onPrimaryContainer,
+                        ),
+                      ),
                       const SizedBox(height: 2),
                       Text(
                         note.title.isEmpty ? note.body : note.title,
@@ -159,7 +165,10 @@ class _ResumeCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                Icon(Icons.arrow_forward_rounded, color: scheme.onPrimaryContainer),
+                Icon(
+                  Icons.arrow_forward_rounded,
+                  color: scheme.onPrimaryContainer,
+                ),
               ],
             ),
           ),

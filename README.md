@@ -8,8 +8,9 @@ documents, notes, fichiers et utilitaires. Développée avec Flutter.
 | Étape | Contenu | État |
 | --- | --- | --- |
 | 1 — Fondations | Navigation à 5 onglets, thèmes (clair, sombre, AMOLED, accent), accueil, recherche, Notes, Calculatrice, Convertisseur | Livrée (0.1.0) |
+| 2 — Fichiers et musique | Gestionnaire de fichiers (navigation, copie, déplacement, renommage, corbeille 30 jours, partage), lecteur de musique (bibliothèque, mini-lecteur, écran de lecture, file d'attente, lecture en arrière-plan) | Livrée (0.2.0) |
 
-Les 18 autres modules apparaissent dans l'application avec l'étiquette « Bientôt ».
+Les 16 autres modules apparaissent dans l'application avec l'étiquette « Bientôt ».
 
 ## Structure
 

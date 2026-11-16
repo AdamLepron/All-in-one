@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../core/modules.dart';
 import '../core/theme.dart';
+import '../modules/music/mini_player.dart';
 import '../modules/notes/notes_page.dart';
 import 'home_page.dart';
 import 'search_page.dart';
@@ -43,34 +44,40 @@ class _AppShellState extends State<AppShell> {
                 label: const Text('Créer'),
               )
             : null,
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _index,
-          onDestinationSelected: (i) => setState(() => _index = i),
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.home_outlined),
-              selectedIcon: Icon(Icons.home_rounded),
-              label: 'Accueil',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.play_circle_outline),
-              selectedIcon: Icon(Icons.play_circle_rounded),
-              label: 'Médias',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.folder_outlined),
-              selectedIcon: Icon(Icons.folder_rounded),
-              label: 'Documents',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.widgets_outlined),
-              selectedIcon: Icon(Icons.widgets_rounded),
-              label: 'Outils',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.search),
-              selectedIcon: Icon(Icons.search_rounded),
-              label: 'Recherche',
+        bottomNavigationBar: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const MiniPlayer(),
+            NavigationBar(
+              selectedIndex: _index,
+              onDestinationSelected: (i) => setState(() => _index = i),
+              destinations: const [
+                NavigationDestination(
+                  icon: Icon(Icons.home_outlined),
+                  selectedIcon: Icon(Icons.home_rounded),
+                  label: 'Accueil',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.play_circle_outline),
+                  selectedIcon: Icon(Icons.play_circle_rounded),
+                  label: 'Médias',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.folder_outlined),
+                  selectedIcon: Icon(Icons.folder_rounded),
+                  label: 'Documents',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.widgets_outlined),
+                  selectedIcon: Icon(Icons.widgets_rounded),
+                  label: 'Outils',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.search),
+                  selectedIcon: Icon(Icons.search_rounded),
+                  label: 'Recherche',
+                ),
+              ],
             ),
           ],
         ),
@@ -93,16 +100,23 @@ class _AppShellState extends State<AppShell> {
                 openNote(context);
               },
             ),
-            for (final id in const ['doc_editor', 'scanner', 'recorder', 'tasks'])
+            for (final id in const [
+              'doc_editor',
+              'scanner',
+              'recorder',
+              'tasks',
+            ])
               ListTile(
                 enabled: false,
                 leading: ModuleIcon(moduleById(id), size: 40),
-                title: Text(const {
-                  'doc_editor': 'Nouveau document',
-                  'scanner': 'Scanner un document',
-                  'recorder': 'Enregistrement audio',
-                  'tasks': 'Nouvelle tâche',
-                }[id]!),
+                title: Text(
+                  const {
+                    'doc_editor': 'Nouveau document',
+                    'scanner': 'Scanner un document',
+                    'recorder': 'Enregistrement audio',
+                    'tasks': 'Nouvelle tâche',
+                  }[id]!,
+                ),
                 trailing: const SoonBadge(),
               ),
           ],

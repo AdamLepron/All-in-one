@@ -14,7 +14,18 @@ const _standardKeys = [
   ['0', ',', '⌫', '='],
 ];
 
-const _scientificKeys = ['sin', 'cos', 'tan', 'ln', 'log', '√', '^', 'π', 'e', '!'];
+const _scientificKeys = [
+  'sin',
+  'cos',
+  'tan',
+  'ln',
+  'log',
+  '√',
+  '^',
+  'π',
+  'e',
+  '!',
+];
 const _operators = ['÷', '×', '−', '+', '^'];
 
 class CalculatorPage extends StatefulWidget {
@@ -52,8 +63,17 @@ class _CalculatorPageState extends State<CalculatorPage> {
           _expr = '';
         case '⌫':
           if (_expr.isNotEmpty) {
-            final fn = ['sin(', 'cos(', 'tan(', 'log(', 'ln('].where(_expr.endsWith);
-            _expr = _expr.substring(0, _expr.length - (fn.isEmpty ? 1 : fn.first.length));
+            final fn = [
+              'sin(',
+              'cos(',
+              'tan(',
+              'log(',
+              'ln(',
+            ].where(_expr.endsWith);
+            _expr = _expr.substring(
+              0,
+              _expr.length - (fn.isEmpty ? 1 : fn.first.length),
+            );
           }
         case '=':
           _evaluate();
@@ -110,15 +130,18 @@ class _CalculatorPageState extends State<CalculatorPage> {
   void _showError() {
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
-      ..showSnackBar(const SnackBar(
-        content: Text('Expression incorrecte'),
-        duration: Duration(seconds: 2),
-      ));
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('Expression incorrecte'),
+          duration: Duration(seconds: 2),
+        ),
+      );
   }
 
   @override
   Widget build(BuildContext context) {
-    final landscape = MediaQuery.orientationOf(context) == Orientation.landscape;
+    final landscape =
+        MediaQuery.orientationOf(context) == Orientation.landscape;
     final scheme = Theme.of(context).colorScheme;
     final display = _Display(expression: _expr, preview: _preview);
     final standard = _KeyGrid(
@@ -214,8 +237,10 @@ class _CalculatorPageState extends State<CalculatorPage> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 ListTile(
-                  title: Text('Historique',
-                      style: Theme.of(context).textTheme.titleLarge),
+                  title: Text(
+                    'Historique',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
                   trailing: history.isEmpty
                       ? null
                       : TextButton(
@@ -236,8 +261,10 @@ class _CalculatorPageState extends State<CalculatorPage> {
                       itemBuilder: (_, i) {
                         final parts = history[i].split(' = ');
                         return ListTile(
-                          title: Text(parts.last,
-                              style: const TextStyle(fontWeight: FontWeight.w700)),
+                          title: Text(
+                            parts.last,
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
                           subtitle: Text(parts.first),
                           onTap: () {
                             Navigator.pop(sheet);
@@ -353,7 +380,9 @@ class _KeyGrid extends StatelessWidget {
 
   (Color, Color) _colorsFor(String key, ColorScheme s) {
     if (key == '=') return (s.primary, s.onPrimary);
-    if (_operators.contains(key)) return (s.primaryContainer, s.onPrimaryContainer);
+    if (_operators.contains(key)) {
+      return (s.primaryContainer, s.onPrimaryContainer);
+    }
     if (compact || const ['AC', '( )', '%', '⌫'].contains(key)) {
       return (s.surfaceContainerHighest, s.onSurface);
     }

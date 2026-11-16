@@ -22,11 +22,17 @@ class ComingSoonPage extends StatelessWidget {
             children: [
               ModuleIcon(module, size: 96),
               const SizedBox(height: 24),
-              Text(module.name,
-                  style: text.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
+              Text(
+                module.name,
+                style: text.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
               const SizedBox(height: 8),
-              Text(module.description,
-                  style: text.bodyLarge?.copyWith(color: scheme.onSurfaceVariant)),
+              Text(
+                module.description,
+                style: text.bodyLarge?.copyWith(color: scheme.onSurfaceVariant),
+              ),
               const SizedBox(height: 24),
               Text(
                 'Ce module arrive dans une prochaine étape.',

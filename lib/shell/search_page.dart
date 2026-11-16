@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 
 import '../core/modules.dart';
 import '../core/util.dart';
+import '../modules/music/music_controller.dart';
+import '../modules/music/music_page.dart';
 import '../modules/notes/notes_page.dart';
 import '../modules/notes/notes_store.dart';
 import 'widgets.dart';
@@ -33,11 +35,17 @@ class _SearchPageState extends State<SearchPage> {
     final moduleHits = q.isEmpty
         ? <AppModule>[]
         : modules
-            .where((m) =>
-                m.name.toLowerCase().contains(q) ||
-                m.description.toLowerCase().contains(q))
-            .toList();
+              .where(
+                (m) =>
+                    m.name.toLowerCase().contains(q) ||
+                    m.description.toLowerCase().contains(q),
+              )
+              .toList();
     final noteHits = store.search(q);
+    final music = context.watch<MusicController>();
+    final songHits = q.isEmpty
+        ? const <Never>[]
+        : music.songs.where((s) => s.matches(q)).take(8).toList();
 
     return Scaffold(
       appBar: AppBar(title: const Text('Recherche')),
@@ -50,7 +58,7 @@ class _SearchPageState extends State<SearchPage> {
               onChanged: (v) => setState(() => _query = v),
               textInputAction: TextInputAction.search,
               decoration: InputDecoration(
-                hintText: 'Modules, notes…',
+                hintText: 'Modules, notes, musique…',
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _query.isEmpty
                     ? null
@@ -68,44 +76,47 @@ class _SearchPageState extends State<SearchPage> {
             child: q.isEmpty
                 ? _Hint(
                     icon: Icons.search,
-                    text: 'Cherchez un module ou le contenu de vos notes',
+                    text: 'Cherchez un module, une note ou un morceau',
                     color: scheme.outline,
                   )
-                : moduleHits.isEmpty && noteHits.isEmpty
-                    ? _Hint(
-                        icon: Icons.search_off,
-                        text: 'Aucun résultat pour « ${_query.trim()} »',
-                        color: scheme.outline,
-                      )
-                    : ListView(
-                        children: [
-                          if (moduleHits.isNotEmpty) const _GroupLabel('Modules'),
-                          for (final m in moduleHits)
-                            ListTile(
-                              leading: ModuleIcon(m, size: 40),
-                              title: Text(m.name),
-                              subtitle: Text(m.description),
-                              trailing: m.available ? null : const SoonBadge(),
-                              onTap: () => m.open(context),
-                            ),
-                          if (noteHits.isNotEmpty) const _GroupLabel('Notes'),
-                          for (final n in noteHits)
-                            ListTile(
-                              leading: ModuleIcon(moduleById('notes'), size: 40),
-                              title: Text(
-                                n.title.isEmpty ? 'Sans titre' : n.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              subtitle: Text(
-                                n.body.isEmpty ? relativeDate(n.updatedAt) : n.body,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              onTap: () => openNote(context, n),
-                            ),
-                        ],
-                      ),
+                : moduleHits.isEmpty && noteHits.isEmpty && songHits.isEmpty
+                ? _Hint(
+                    icon: Icons.search_off,
+                    text: 'Aucun résultat pour « ${_query.trim()} »',
+                    color: scheme.outline,
+                  )
+                : ListView(
+                    children: [
+                      if (moduleHits.isNotEmpty) const _GroupLabel('Modules'),
+                      for (final m in moduleHits)
+                        ListTile(
+                          leading: ModuleIcon(m, size: 40),
+                          title: Text(m.name),
+                          subtitle: Text(m.description),
+                          trailing: m.available ? null : const SoonBadge(),
+                          onTap: () => m.open(context),
+                        ),
+                      if (songHits.isNotEmpty) const _GroupLabel('Musique'),
+                      for (final (i, s) in songHits.indexed)
+                        SongTile(s, onTap: () => music.play(songHits, i)),
+                      if (noteHits.isNotEmpty) const _GroupLabel('Notes'),
+                      for (final n in noteHits)
+                        ListTile(
+                          leading: ModuleIcon(moduleById('notes'), size: 40),
+                          title: Text(
+                            n.title.isEmpty ? 'Sans titre' : n.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            n.body.isEmpty ? relativeDate(n.updatedAt) : n.body,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          onTap: () => openNote(context, n),
+                        ),
+                    ],
+                  ),
           ),
         ],
       ),
@@ -124,9 +135,9 @@ class _GroupLabel extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: Theme.of(context).colorScheme.primary,
-              fontWeight: FontWeight.w700,
-            ),
+          color: Theme.of(context).colorScheme.primary,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }

@@ -17,11 +17,11 @@ const _functions = ['sin', 'cos', 'tan', 'ln', 'log', '√'];
 
 class _Parser {
   _Parser(String source, this.degrees)
-      : src = source
-            .replaceAll(' ', '')
-            .replaceAll(' ', '')
-            .replaceAll(',', '.')
-            .replaceAll('−', '-');
+    : src = source
+          .replaceAll(' ', '')
+          .replaceAll(' ', '')
+          .replaceAll(',', '.')
+          .replaceAll('−', '-');
 
   final String src;
   final bool degrees;

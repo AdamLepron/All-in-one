@@ -1,6 +1,16 @@
 const _months = [
-  'janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin',
-  'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.',
+  'janv.',
+  'févr.',
+  'mars',
+  'avr.',
+  'mai',
+  'juin',
+  'juil.',
+  'août',
+  'sept.',
+  'oct.',
+  'nov.',
+  'déc.',
 ];
 
 String _two(int n) => n.toString().padLeft(2, '0');
@@ -13,9 +23,11 @@ String relativeDate(DateTime date) {
   if (diff.inSeconds < 60) return "À l'instant";
   if (diff.inMinutes < 60) return 'Il y a ${diff.inMinutes} min';
   final time = '${_two(date.hour)}:${_two(date.minute)}';
-  final days = DateTime(now.year, now.month, now.day)
-      .difference(DateTime(date.year, date.month, date.day))
-      .inDays;
+  final days = DateTime(
+    now.year,
+    now.month,
+    now.day,
+  ).difference(DateTime(date.year, date.month, date.day)).inDays;
   if (days == 0) return "Aujourd'hui $time";
   if (days == 1) return 'Hier $time';
   final day = '${date.day} ${_months[date.month - 1]}';
@@ -53,4 +65,25 @@ String formatNumber(double value, {int digits = 10}) {
     buffer.write(intPart[i]);
   }
   return '${negative ? '-' : ''}$buffer${parts.length > 1 ? ',${parts[1]}' : ''}';
+}
+
+/// "1,4 Go", "512 ko", "0 o".
+String formatBytes(int bytes) {
+  const units = ['o', 'ko', 'Mo', 'Go', 'To'];
+  var value = bytes.toDouble();
+  var unit = 0;
+  while (value >= 1000 && unit < units.length - 1) {
+    value /= 1000;
+    unit++;
+  }
+  final digits = unit == 0 || value >= 100 ? 0 : 1;
+  return '${value.toStringAsFixed(digits).replaceAll('.', ',')} ${units[unit]}';
+}
+
+/// "3:07", "1:02:45".
+String formatDuration(Duration d) {
+  final h = d.inHours;
+  final m = d.inMinutes.remainder(60);
+  final s = _two(d.inSeconds.remainder(60));
+  return h > 0 ? '$h:${_two(m)}:$s' : '$m:$s';
 }

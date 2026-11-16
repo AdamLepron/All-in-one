@@ -21,7 +21,8 @@ class UnitCategory {
   final List<Unit> units;
 }
 
-double convert(double value, Unit from, Unit to) => to.fromBase(from.toBase(value));
+double convert(double value, Unit from, Unit to) =>
+    to.fromBase(from.toBase(value));
 
 const unitCategories = <UnitCategory>[
   UnitCategory('Longueur', Icons.straighten, [

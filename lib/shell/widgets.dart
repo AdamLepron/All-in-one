@@ -55,14 +55,18 @@ class ModuleTile extends StatelessWidget {
                 ],
               ),
               const Spacer(),
-              Text(module.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: text.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
-              Text(module.description,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: text.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
+              Text(
+                module.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: text.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              Text(
+                module.description,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: text.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+              ),
             ],
           ),
         ),
@@ -83,11 +87,14 @@ class SoonBadge extends StatelessWidget {
         color: scheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Text('Bientôt',
-          style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              color: scheme.onSurfaceVariant)),
+      child: Text(
+        'Bientôt',
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          color: scheme.onSurfaceVariant,
+        ),
+      ),
     );
   }
 }
@@ -128,11 +135,11 @@ class SectionTitle extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Text(title,
-                style: Theme.of(context)
-                    .textTheme
-                    .titleLarge
-                    ?.copyWith(fontWeight: FontWeight.w700)),
+            child: Text(
+              title,
+              style: Theme.of(context).textTheme.titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w700),
+            ),
           ),
           ?trailing,
         ],
@@ -157,7 +164,9 @@ void showModuleActions(BuildContext context, AppModule module) {
           ),
           ListTile(
             leading: Icon(pinned ? Icons.push_pin_outlined : Icons.push_pin),
-            title: Text(pinned ? "Retirer de l'accueil" : "Épingler à l'accueil"),
+            title: Text(
+              pinned ? "Retirer de l'accueil" : "Épingler à l'accueil",
+            ),
             onTap: () {
               Navigator.pop(sheet);
               settings.togglePinned(module.id);

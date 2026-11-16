@@ -31,7 +31,9 @@ void main() {
   });
 
   test('unit conversion', () {
-    final temp = unitCategories.firstWhere((c) => c.name == 'Température').units;
+    final temp = unitCategories
+        .firstWhere((c) => c.name == 'Température')
+        .units;
     expect(convert(100, temp[0], temp[1]), closeTo(212, 1e-9));
     expect(convert(32, temp[1], temp[0]), closeTo(0, 1e-9));
     final len = unitCategories.first.units;

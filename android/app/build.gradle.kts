@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.allinone.all_in_one"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 37 // required by permission_handler
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

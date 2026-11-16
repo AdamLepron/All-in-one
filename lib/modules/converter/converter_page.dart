@@ -26,16 +26,17 @@ class _ConverterPageState extends State<ConverterPage> {
   }
 
   void _selectCategory(UnitCategory c) => setState(() {
-        _category = c;
-        _from = c.units[0];
-        _to = c.units[1];
-      });
+    _category = c;
+    _from = c.units[0];
+    _to = c.units[1];
+  });
 
   void _swap() {
     final value = _value;
     setState(() {
       if (value != null) {
-        _input.text = formatNumber(convert(value, _from, _to)).replaceAll(' ', '');
+        _input.text = formatNumber(convert(value, _from, _to))
+            .replaceAll(' ', '');
       }
       final previous = _from;
       _from = _to;
@@ -47,10 +48,12 @@ class _ConverterPageState extends State<ConverterPage> {
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
-      ..showSnackBar(SnackBar(
-        content: Text('$text copié'),
-        duration: const Duration(seconds: 2),
-      ));
+      ..showSnackBar(
+        SnackBar(
+          content: Text('$text copié'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
   }
 
   @override
@@ -58,7 +61,9 @@ class _ConverterPageState extends State<ConverterPage> {
     final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
     final value = _value;
-    final result = value == null ? '—' : formatNumber(convert(value, _from, _to));
+    final result = value == null
+        ? '—'
+        : formatNumber(convert(value, _from, _to));
 
     return Scaffold(
       appBar: AppBar(title: const Text('Convertisseur')),
@@ -101,7 +106,9 @@ class _ConverterPageState extends State<ConverterPage> {
                       controller: _input,
                       onChanged: (_) => setState(() {}),
                       keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true, signed: true),
+                        decimal: true,
+                        signed: true,
+                      ),
                       inputFormatters: [
                         FilteringTextInputFormatter.allow(RegExp(r'[0-9.,\-]')),
                       ],
@@ -153,8 +160,10 @@ class _ConverterPageState extends State<ConverterPage> {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
-            child: Text('Toutes les unités',
-                style: text.titleSmall?.copyWith(color: scheme.onSurfaceVariant)),
+            child: Text(
+              'Toutes les unités',
+              style: text.titleSmall?.copyWith(color: scheme.onSurfaceVariant),
+            ),
           ),
           for (final unit in _category.units)
             if (unit != _from)
@@ -216,9 +225,13 @@ class _UnitPicker extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('${value.name} (${value.symbol})',
-                style: TextStyle(
-                    color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
+            Text(
+              '${value.name} (${value.symbol})',
+              style: TextStyle(
+                color: scheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             Icon(Icons.arrow_drop_down, color: scheme.onSurfaceVariant),
           ],
         ),
