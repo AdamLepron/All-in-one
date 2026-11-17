@@ -16,8 +16,9 @@ documents, notes, fichiers et utilitaires. Développée avec Flutter.
 | 7 — Scanner et nettoyeur | Scanner de documents (détection des bords, multipage, PDF, texte reconnu et cherchable), nettoyeur (doublons, gros fichiers, téléchargements et captures anciens, APK, fichiers temporaires, corbeille) | Livrée (0.7.0) |
 | 8 — Éditeur photo | Réglages (luminosité, contraste, saturation, chaleur, fondu, vignette), 12 filtres à intensité réglable, rognage par ratios, rotation, miroir, dessin à main levée, annuler/rétablir, enregistrement en copie JPEG | Livrée (0.8.0) |
 | 9 — Transfert et documents | Transfert local (envoi et réception par Wi-Fi via un lien et un QR code, sans application sur l'autre appareil), éditeur de documents texte et Markdown (barre de mise en forme, aperçu, enregistrement automatique, export PDF) | Livrée (0.9.0) |
+| 10 — Éditeur vidéo | Montage : découpe, assemblage de plusieurs vidéos, vitesse de 0,25× à 4×, rotation, son d'origine coupé ou remplacé par une musique, export MP4 (H.264) avec progression | Livrée (1.0.0) |
 
-Le dernier module (éditeur vidéo) apparaît dans l'application avec l'étiquette « Bientôt ».
+Les 21 modules du cahier des charges sont désormais disponibles ; leurs fonctions les plus avancées (pistes multiples, transitions, titres animés, tableur, présentations) restent à venir.
 
 ## Structure
 

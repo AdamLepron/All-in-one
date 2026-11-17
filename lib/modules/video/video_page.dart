@@ -7,6 +7,7 @@ import '../../core/util.dart';
 import '../gallery/gallery_page.dart' show MediaMessage;
 import '../gallery/media_grid.dart';
 import '../gallery/media_library.dart';
+import '../video_editor/video_editor_home.dart';
 import 'video_player_page.dart';
 
 void playVideo(BuildContext context, Media media) {
@@ -165,7 +166,32 @@ class _VideoTile extends StatelessWidget {
     final total = media.duration.inMilliseconds;
     return InkWell(
       onTap: () => playVideo(context, media),
-      onLongPress: () => shareMedia([media]),
+      onLongPress: () => showModalBottomSheet<void>(
+        context: context,
+        builder: (sheet) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.content_cut_rounded),
+                title: const Text('Monter cette vidéo'),
+                onTap: () {
+                  Navigator.pop(sheet);
+                  editVideo(context, media);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.share_outlined),
+                title: const Text('Partager'),
+                onTap: () {
+                  Navigator.pop(sheet);
+                  shareMedia([media]);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: Row(

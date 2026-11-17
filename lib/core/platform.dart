@@ -104,6 +104,22 @@ class MediaChannel {
     }
   }
 
+  /// Exports a montage and returns the path of the file. [args] is built by
+  /// the video editor project. Throws a [PlatformException] on failure.
+  static Future<String> exportVideo(Map<String, Object?> args) async =>
+      (await _channel.invokeMethod<String>('exportVideo', args))!;
+
+  /// 0–100 while an export runs, -1 when unknown.
+  static Future<int> exportProgress() async {
+    try {
+      return await _channel.invokeMethod<int>('exportProgress') ?? -1;
+    } on MissingPluginException {
+      return -1;
+    }
+  }
+
+  static Future<void> cancelExport() => _quiet('cancelExport', const {});
+
   static Future<bool> hasTorch() async => await _flag('hasTorch', const {});
 
   /// False when the device has no flash or the camera is using it.

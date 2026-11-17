@@ -31,6 +31,7 @@ class MainActivity : AudioServiceActivity() {
     private val main = Handler(Looper.getMainLooper())
     private val pdf = PdfDocuments()
     private val effects = AudioEffects()
+    private val video by lazy { VideoExporter(this) }
     private val tools by lazy { DeviceTools(this) }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -131,6 +132,15 @@ class MainActivity : AudioServiceActivity() {
                     call.argument<Double>("balance") ?: 0.0,
                 )
             )
+            "exportVideo" -> {
+                @Suppress("UNCHECKED_CAST")
+                video.export(call.arguments as Map<String, Any?>, result)
+            }
+            "exportProgress" -> result.success(video.progress())
+            "cancelExport" -> {
+                video.cancel()
+                result.success(null)
+            }
             "hasTorch" -> result.success(tools.hasTorch())
             "torch" -> result.success(tools.setTorch(call.argument<Boolean>("on") == true))
             "dpi" -> result.success(tools.dpi())
@@ -345,6 +355,7 @@ class MainActivity : AudioServiceActivity() {
     }
 
     override fun onDestroy() {
+        video.cancel()
         tools.release()
         effects.release()
         pdf.closeAll()

@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/platform.dart';
+import '../../core/theme.dart';
 import '../files/files_ui.dart';
 import '../gallery/media_library.dart';
 import 'edit_model.dart';
@@ -225,12 +226,9 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
       },
       child: Theme(
         // The editor is always dark so colours are judged against neutral grey.
-        data: Theme.of(context).copyWith(
-          brightness: Brightness.dark,
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: Theme.of(context).colorScheme.primary,
-            brightness: Brightness.dark,
-          ),
+        data: buildTheme(
+          Theme.of(context).colorScheme.primary,
+          Brightness.dark,
         ),
         child: Builder(
           builder: (context) => Scaffold(

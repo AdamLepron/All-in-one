@@ -4,6 +4,7 @@ import '../modules/calculator/calculator_page.dart';
 import '../modules/calendar/calendar_page.dart';
 import '../modules/tasks/tasks_page.dart';
 import '../modules/transfer/transfer_page.dart';
+import '../modules/video_editor/video_editor_home.dart';
 import '../modules/cleaner/cleaner_page.dart';
 import '../modules/clock/clock_page.dart';
 import '../modules/scanner/scanner_page.dart';
@@ -92,12 +93,13 @@ final modules = <AppModule>[
     Family.media,
     (_) => const PhotoPage(),
   ),
-  const AppModule(
+  AppModule(
     'video_editor',
     'Éditeur vidéo',
-    'Montage multipiste',
+    'Couper, assembler, vitesse, musique',
     Icons.movie_edit,
     Family.media,
+    (_) => const VideoEditorHome(),
   ),
   AppModule(
     'recorder',
