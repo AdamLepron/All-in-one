@@ -1,6 +1,8 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../modules/calculator/calculator_page.dart';
+import '../modules/calendar/calendar_page.dart';
+import '../modules/tasks/tasks_page.dart';
 import '../modules/clock/clock_page.dart';
 import '../modules/qr/qr_page.dart';
 import '../modules/recorder/recorder_page.dart';
@@ -138,19 +140,21 @@ final modules = <AppModule>[
     Icons.document_scanner_rounded,
     Family.productivity,
   ),
-  const AppModule(
+  AppModule(
     'tasks',
     'Tâches',
     'Listes et rappels',
     Icons.check_circle_rounded,
     Family.productivity,
+    (_) => const TasksPage(),
   ),
-  const AppModule(
+  AppModule(
     'calendar',
     'Agenda',
     'Événements',
     Icons.calendar_month_rounded,
     Family.productivity,
+    (_) => const CalendarPage(),
   ),
   // Utilitaires
   AppModule(

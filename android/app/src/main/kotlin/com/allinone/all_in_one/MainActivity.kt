@@ -53,6 +53,10 @@ class MainActivity : AudioServiceActivity() {
                             )
                             "storage" -> storage()
                             "media" -> queryMedia()
+                            "calendarEvents" -> calendarEvents(
+                                (call.argument<Number>("start"))!!.toLong(),
+                                (call.argument<Number>("end"))!!.toLong(),
+                            )
                             "thumbnail" -> thumbnail(
                                 (call.argument<Number>("id"))!!.toLong(),
                                 call.argument<Boolean>("video") ?: false,
@@ -152,6 +156,46 @@ class MainActivity : AudioServiceActivity() {
             else -> return false
         }
         return true
+    }
+
+    /** Occurrences of the phone's calendar events between two instants. */
+    private fun calendarEvents(start: Long, end: Long): List<Map<String, Any?>> {
+        val events = ArrayList<Map<String, Any?>>()
+        val uri = android.provider.CalendarContract.Instances.CONTENT_URI.buildUpon()
+            .appendPath(start.toString())
+            .appendPath(end.toString())
+            .build()
+        val columns = arrayOf(
+            android.provider.CalendarContract.Instances.EVENT_ID,
+            android.provider.CalendarContract.Instances.TITLE,
+            android.provider.CalendarContract.Instances.BEGIN,
+            android.provider.CalendarContract.Instances.END,
+            android.provider.CalendarContract.Instances.ALL_DAY,
+            android.provider.CalendarContract.Instances.DISPLAY_COLOR,
+            android.provider.CalendarContract.Instances.EVENT_LOCATION,
+            android.provider.CalendarContract.Instances.CALENDAR_DISPLAY_NAME,
+        )
+        try {
+            contentResolver.query(uri, columns, null, null, null)?.use { c ->
+                while (c.moveToNext()) {
+                    events.add(
+                        mapOf(
+                            "id" to c.getLong(0),
+                            "title" to c.getString(1),
+                            "start" to c.getLong(2),
+                            "end" to c.getLong(3),
+                            "allDay" to (c.getInt(4) != 0),
+                            "color" to c.getInt(5),
+                            "location" to c.getString(6),
+                            "calendar" to c.getString(7),
+                        )
+                    )
+                }
+            }
+        } catch (e: SecurityException) {
+            // Calendar access not granted: no device events.
+        }
+        return events
     }
 
     /** Every photo and video of the device, unsorted. */

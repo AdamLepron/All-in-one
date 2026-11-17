@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:all_in_one/core/settings.dart';
 import 'package:all_in_one/main.dart';
+import 'package:all_in_one/modules/calendar/calendar_page.dart';
 import 'package:all_in_one/modules/clock/clock_controller.dart';
 import 'package:all_in_one/modules/clock/clock_page.dart';
 import 'package:all_in_one/modules/equalizer/equalizer_controller.dart';
@@ -18,6 +19,8 @@ import 'package:all_in_one/modules/qr/qr_page.dart';
 import 'package:all_in_one/modules/recorder/recorder_controller.dart';
 import 'package:all_in_one/modules/recorder/recorder_page.dart';
 import 'package:all_in_one/modules/sensors/sensors_page.dart';
+import 'package:all_in_one/modules/tasks/organizer_store.dart';
+import 'package:all_in_one/modules/tasks/tasks_page.dart';
 import 'package:all_in_one/modules/reader/reader_page.dart';
 import 'package:all_in_one/shell/app_shell.dart';
 import 'package:flutter/services.dart';
@@ -57,6 +60,7 @@ void main() {
 
     late AppSettings settings;
     late NotesStore notes;
+    late OrganizerStore organizer;
     late Directory tmp;
     await tester.runAsync(() async {
       await loadFonts();
@@ -66,6 +70,10 @@ void main() {
         '${await getDatabasesPath()}/notes.db',
       );
       notes = await NotesStore.open();
+      await databaseFactory.deleteDatabase(
+        '${await getDatabasesPath()}/organizer_app.db',
+      );
+      organizer = await OrganizerStore.load(file: 'organizer_app.db');
       // Fixed folder name: it is displayed and must not vary between runs.
       final parent = await Directory.systemTemp.createTemp('app_test');
       tmp = await Directory('${parent.path}/Téléphone').create();
@@ -131,6 +139,7 @@ void main() {
         providers: [
           ChangeNotifierProvider.value(value: settings),
           ChangeNotifierProvider.value(value: notes),
+          ChangeNotifierProvider.value(value: organizer),
           ChangeNotifierProvider.value(value: music),
           ChangeNotifierProvider(
             create: (_) => EqualizerController(settings, music),
@@ -475,6 +484,88 @@ void main() {
     expect(find.textContaining('21:05'), findsOneWidget);
     await shot('34_recorder');
     await close();
+
+    // Tasks: quick add understands dates, completing moves the task.
+    await open(const TasksPage());
+    expect(find.text("Rien de prévu aujourd'hui"), findsOneWidget);
+    await tester.enterText(
+      find.byType(TextField),
+      'Appeler le plombier demain 9h urgent',
+    );
+    await tester.pump();
+    expect(
+      find.text('Demain 9:00'),
+      findsOneWidget,
+    ); // preview of what was understood
+    await shot('35_tasks_quick_add');
+    await tester.tap(find.byTooltip('Ajouter'));
+    await settle();
+    expect(organizer.open.single.title, 'Appeler le plombier');
+    expect(organizer.open.single.priority, 3);
+    final today = dayOf(DateTime.now());
+    await tester.runAsync(() async {
+      await organizer.saveTask(
+        Task(title: 'Envoyer le devis', due: today, priority: 2),
+      );
+      await organizer.saveTask(
+        Task(title: 'Arroser les plantes', due: today, repeat: Repeat.weekly),
+      );
+      await organizer.saveTask(
+        Task(
+          title: 'Renouveler le passeport',
+          due: today.subtract(const Duration(days: 2)),
+          list: 'Administratif',
+        ),
+      );
+      await organizer.saveEvent(
+        Event(
+          title: "Réunion d'équipe",
+          start: today.add(const Duration(hours: 14)),
+          end: today.add(const Duration(hours: 15)),
+          location: 'Salle Vauban',
+          color: 4,
+        ),
+      );
+      await organizer.saveEvent(
+        Event(
+          title: 'Week-end à Lyon',
+          start: today.add(const Duration(days: 4)),
+          end: today.add(const Duration(days: 6)),
+          allDay: true,
+          color: 1,
+        ),
+      );
+    });
+    await tester.pumpAndSettle();
+    expect(find.text('En retard'), findsOneWidget);
+    await shot('36_tasks_today');
+    await tester.tap(find.byTooltip('Terminer').last);
+    await settle();
+    expect(organizer.completed.length, 1);
+    await close();
+
+    await open(const CalendarPage());
+    expect(find.text("Réunion d'équipe"), findsOneWidget);
+    await shot('37_calendar_month');
+    await tester.tap(find.byTooltip('Vue planning'));
+    await tester.pumpAndSettle();
+    expect(find.text('Week-end à Lyon'), findsWidgets);
+    await shot('38_calendar_agenda');
+    await tester.tap(find.byTooltip('Nouvel événement'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, 'Dîner chez Léa');
+    await tester.pumpAndSettle();
+    await shot('39_event_editor');
+    await tester.tap(find.text('Enregistrer'));
+    await settle();
+    expect(organizer.events.map((e) => e.title), contains('Dîner chez Léa'));
+    await close();
+
+    await tester.tap(find.text('Accueil'));
+    await tester.pumpAndSettle();
+    expect(find.text("Aujourd'hui"), findsWidgets);
+    expect(find.text("Réunion d'équipe"), findsOneWidget);
+    await shot('40_home_today');
 
     // Dark AMOLED theme.
     settings

@@ -7,6 +7,8 @@ import '../modules/music/music_controller.dart';
 import '../modules/music/music_page.dart';
 import '../modules/notes/notes_page.dart';
 import '../modules/notes/notes_store.dart';
+import '../modules/tasks/organizer_store.dart';
+import '../modules/tasks/tasks_page.dart';
 import 'widgets.dart';
 
 /// Universal search across modules and note contents.
@@ -42,6 +44,14 @@ class _SearchPageState extends State<SearchPage> {
               )
               .toList();
     final noteHits = store.search(q);
+    final taskHits = q.isEmpty
+        ? const <Task>[]
+        : context
+              .watch<OrganizerStore>()
+              .open
+              .where((t) => t.title.toLowerCase().contains(q))
+              .take(8)
+              .toList();
     final music = context.watch<MusicController>();
     final songHits = q.isEmpty
         ? const <Never>[]
@@ -58,7 +68,7 @@ class _SearchPageState extends State<SearchPage> {
               onChanged: (v) => setState(() => _query = v),
               textInputAction: TextInputAction.search,
               decoration: InputDecoration(
-                hintText: 'Modules, notes, musique…',
+                hintText: 'Modules, notes, tâches, musique…',
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _query.isEmpty
                     ? null
@@ -79,7 +89,10 @@ class _SearchPageState extends State<SearchPage> {
                     text: 'Cherchez un module, une note ou un morceau',
                     color: scheme.outline,
                   )
-                : moduleHits.isEmpty && noteHits.isEmpty && songHits.isEmpty
+                : moduleHits.isEmpty &&
+                      noteHits.isEmpty &&
+                      songHits.isEmpty &&
+                      taskHits.isEmpty
                 ? _Hint(
                     icon: Icons.search_off,
                     text: 'Aucun résultat pour « ${_query.trim()} »',
@@ -99,6 +112,8 @@ class _SearchPageState extends State<SearchPage> {
                       if (songHits.isNotEmpty) const _GroupLabel('Musique'),
                       for (final (i, s) in songHits.indexed)
                         SongTile(s, onTap: () => music.play(songHits, i)),
+                      if (taskHits.isNotEmpty) const _GroupLabel('Tâches'),
+                      for (final t in taskHits) TaskTile(t),
                       if (noteHits.isNotEmpty) const _GroupLabel('Notes'),
                       for (final n in noteHits)
                         ListTile(

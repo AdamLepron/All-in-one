@@ -2,8 +2,11 @@ import 'package:material_ui/material_ui.dart';
 
 import '../core/modules.dart';
 import '../core/theme.dart';
+import '../modules/calendar/event_editor_page.dart';
 import '../modules/music/mini_player.dart';
 import '../modules/notes/notes_page.dart';
+import '../modules/tasks/organizer_store.dart';
+import '../modules/tasks/tasks_page.dart';
 import 'home_page.dart';
 import 'search_page.dart';
 import 'widgets.dart';
@@ -100,12 +103,35 @@ class _AppShellState extends State<AppShell> {
                 openNote(context);
               },
             ),
-            for (final id in const [
-              'doc_editor',
-              'scanner',
-              'recorder',
-              'tasks',
-            ])
+            ListTile(
+              leading: ModuleIcon(moduleById('tasks'), size: 40),
+              title: const Text('Nouvelle tâche'),
+              onTap: () {
+                Navigator.pop(sheet);
+                showTaskEditor(context);
+              },
+            ),
+            ListTile(
+              leading: ModuleIcon(moduleById('calendar'), size: 40),
+              title: const Text('Nouvel événement'),
+              onTap: () {
+                Navigator.pop(sheet);
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => EventEditorPage(day: dayOf(DateTime.now())),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: ModuleIcon(moduleById('recorder'), size: 40),
+              title: const Text('Enregistrement audio'),
+              onTap: () {
+                Navigator.pop(sheet);
+                moduleById('recorder').open(context);
+              },
+            ),
+            for (final id in const ['doc_editor', 'scanner'])
               ListTile(
                 enabled: false,
                 leading: ModuleIcon(moduleById(id), size: 40),
@@ -113,8 +139,6 @@ class _AppShellState extends State<AppShell> {
                   const {
                     'doc_editor': 'Nouveau document',
                     'scanner': 'Scanner un document',
-                    'recorder': 'Enregistrement audio',
-                    'tasks': 'Nouvelle tâche',
                   }[id]!,
                 ),
                 trailing: const SoonBadge(),

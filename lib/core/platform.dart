@@ -88,6 +88,22 @@ class MediaChannel {
     }
   }
 
+  /// Occurrences of the phone's calendar events in a time range (epoch ms).
+  static Future<List<Map<Object?, Object?>>> calendarEvents(
+    int start,
+    int end,
+  ) async {
+    try {
+      return (await _channel.invokeListMethod<Map<Object?, Object?>>(
+            'calendarEvents',
+            {'start': start, 'end': end},
+          )) ??
+          const [];
+    } on MissingPluginException {
+      return const [];
+    }
+  }
+
   static Future<bool> hasTorch() async => await _flag('hasTorch', const {});
 
   /// False when the device has no flash or the camera is using it.

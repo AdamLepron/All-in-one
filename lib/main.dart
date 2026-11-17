@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
+import 'core/notifications.dart';
 import 'core/settings.dart';
 import 'core/theme.dart';
 
@@ -13,12 +14,17 @@ import 'modules/gallery/media_library.dart';
 import 'modules/music/music_controller.dart';
 import 'modules/notes/notes_store.dart';
 import 'modules/recorder/recorder_controller.dart';
+import 'modules/tasks/organizer_store.dart';
 import 'shell/app_shell.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final settings = await AppSettings.load();
   final notes = await NotesStore.open();
+  await Reminders.init();
+  final organizer = await OrganizerStore.load();
+  // Not awaited: re-arming reminders must not delay the first frame.
+  organizer.refreshReminders();
   // Media notification and lock-screen controls.
   await JustAudioBackground.init(
     androidNotificationChannelId: 'com.allinone.all_in_one.audio',
@@ -32,6 +38,7 @@ Future<void> main() async {
       providers: [
         ChangeNotifierProvider.value(value: settings),
         ChangeNotifierProvider.value(value: notes),
+        ChangeNotifierProvider.value(value: organizer),
         ChangeNotifierProvider.value(value: music),
         ChangeNotifierProvider(
           create: (_) => EqualizerController(settings, music),

@@ -3,8 +3,11 @@ import 'package:provider/provider.dart';
 
 import '../core/modules.dart';
 import '../core/settings.dart';
+import '../modules/calendar/calendar_page.dart' show eventColors;
 import '../modules/notes/notes_page.dart';
 import '../modules/notes/notes_store.dart';
+import '../modules/tasks/organizer_store.dart';
+import '../modules/tasks/tasks_page.dart';
 import 'settings_page.dart';
 import 'widgets.dart';
 
@@ -22,6 +25,13 @@ class HomePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final settings = context.watch<AppSettings>();
     final notes = context.watch<NotesStore>().notes;
+    final organizer = context.watch<OrganizerStore>();
+    final today = dayOf(DateTime.now());
+    final todayTasks = organizer.tasksOn(today, overdue: true);
+    final todayEvents = organizer.eventsBetween(
+      today,
+      today.add(const Duration(days: 1)),
+    );
     final pinned = [
       for (final id in settings.pinned) ...modules.where((m) => m.id == id),
     ];
@@ -48,6 +58,50 @@ class HomePage extends StatelessWidget {
               child: _ResumeCard(
                 note: notes.reduce(
                   (a, b) => a.updatedAt.isAfter(b.updatedAt) ? a : b,
+                ),
+              ),
+            ),
+          ],
+          if (todayTasks.isNotEmpty || todayEvents.isNotEmpty) ...[
+            SectionTitle(
+              "Aujourd'hui",
+              trailing: TextButton(
+                onPressed: () => moduleById('tasks').open(context),
+                child: const Text('Tout voir'),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Card(
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  children: [
+                    for (final e in todayEvents.take(3))
+                      ListTile(
+                        dense: true,
+                        leading: Icon(
+                          Icons.event,
+                          color:
+                              eventColors[e.color.clamp(
+                                0,
+                                eventColors.length - 1,
+                              )],
+                        ),
+                        title: Text(
+                          e.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          e.allDay
+                              ? 'Toute la journée'
+                              : '${e.start.hour}:${e.start.minute.toString().padLeft(2, '0')}',
+                        ),
+                        onTap: () => moduleById('calendar').open(context),
+                      ),
+                    for (final t in todayTasks.take(4))
+                      TaskTile(t, dense: true),
+                  ],
                 ),
               ),
             ),
