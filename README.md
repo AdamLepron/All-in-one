@@ -17,7 +17,7 @@ documents, notes, fichiers et utilitaires. Développée avec Flutter.
 | 8 — Éditeur photo | Réglages (luminosité, contraste, saturation, chaleur, fondu, vignette), 12 filtres à intensité réglable, rognage par ratios, rotation, miroir, dessin à main levée, annuler/rétablir, enregistrement en copie JPEG | Livrée (0.8.0) |
 | 9 — Transfert et documents | Transfert local (envoi et réception par Wi-Fi via un lien et un QR code, sans application sur l'autre appareil), éditeur de documents texte et Markdown (barre de mise en forme, aperçu, enregistrement automatique, export PDF) | Livrée (0.9.0) |
 
-Le dernier module (éditeur vidéo) apparaissent dans l'application avec l'étiquette « Bientôt ».
+Le dernier module (éditeur vidéo) apparaît dans l'application avec l'étiquette « Bientôt ».
 
 ## Structure
 
