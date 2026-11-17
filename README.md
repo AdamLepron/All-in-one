@@ -15,8 +15,9 @@ documents, notes, fichiers et utilitaires. Développée avec Flutter.
 | 6 — Tâches et agenda | Tâches (saisie en langage naturel, priorités, listes, répétition, glisser pour terminer ou reporter), agenda (vue mois et planning, événements répétés, agendas du téléphone en lecture), rappels par notification | Livrée (0.6.0) |
 | 7 — Scanner et nettoyeur | Scanner de documents (détection des bords, multipage, PDF, texte reconnu et cherchable), nettoyeur (doublons, gros fichiers, téléchargements et captures anciens, APK, fichiers temporaires, corbeille) | Livrée (0.7.0) |
 | 8 — Éditeur photo | Réglages (luminosité, contraste, saturation, chaleur, fondu, vignette), 12 filtres à intensité réglable, rognage par ratios, rotation, miroir, dessin à main levée, annuler/rétablir, enregistrement en copie JPEG | Livrée (0.8.0) |
+| 9 — Transfert et documents | Transfert local (envoi et réception par Wi-Fi via un lien et un QR code, sans application sur l'autre appareil), éditeur de documents texte et Markdown (barre de mise en forme, aperçu, enregistrement automatique, export PDF) | Livrée (0.9.0) |
 
-Les 3 autres modules apparaissent dans l'application avec l'étiquette « Bientôt ».
+Le dernier module (éditeur vidéo) apparaissent dans l'application avec l'étiquette « Bientôt ».
 
 ## Structure
 

@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/settings.dart';
+import '../docs/document_editor_page.dart';
 
 /// Above this size only the beginning of the file is shown.
 const _maxBytes = 2 * 1024 * 1024;
@@ -79,6 +80,22 @@ class _TextViewPageState extends State<TextViewPage> {
           style: const TextStyle(fontSize: 17),
         ),
         actions: [
+          if (const {
+            '.md',
+            '.txt',
+          }.contains(p.extension(widget.path).toLowerCase()))
+            IconButton(
+              tooltip: 'Modifier',
+              icon: const Icon(Icons.edit_outlined),
+              onPressed: () => Navigator.of(context).pushReplacement(
+                MaterialPageRoute<void>(
+                  builder: (_) => DocumentEditorPage(
+                    path: widget.path,
+                    directory: p.dirname(widget.path),
+                  ),
+                ),
+              ),
+            ),
           IconButton(
             tooltip: 'Réduire le texte',
             icon: const Icon(Icons.text_decrease),

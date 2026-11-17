@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import '../modules/calculator/calculator_page.dart';
 import '../modules/calendar/calendar_page.dart';
 import '../modules/tasks/tasks_page.dart';
+import '../modules/transfer/transfer_page.dart';
 import '../modules/cleaner/cleaner_page.dart';
 import '../modules/clock/clock_page.dart';
 import '../modules/scanner/scanner_page.dart';
@@ -10,6 +11,7 @@ import '../modules/qr/qr_page.dart';
 import '../modules/recorder/recorder_page.dart';
 import '../modules/sensors/sensors_page.dart';
 import '../modules/converter/converter_page.dart';
+import '../modules/docs/docs_page.dart';
 import '../modules/equalizer/equalizer_page.dart';
 import '../modules/files/files_page.dart';
 import '../modules/photo/photo_page.dart';
@@ -122,12 +124,13 @@ final modules = <AppModule>[
     Family.productivity,
     (_) => const ReaderPage(),
   ),
-  const AppModule(
+  AppModule(
     'doc_editor',
     'Éditeur de documents',
-    'Texte, tableur, diapos',
+    'Texte et Markdown, export PDF',
     Icons.edit_document,
     Family.productivity,
+    (_) => const DocsPage(),
   ),
   AppModule(
     'notes',
@@ -210,12 +213,13 @@ final modules = <AppModule>[
     Family.tools,
     (_) => const CleanerPage(),
   ),
-  const AppModule(
+  AppModule(
     'transfer',
     'Transfert local',
-    'Envoi entre appareils',
+    'Envoi par Wi-Fi, sans Internet',
     Icons.wifi_tethering_rounded,
     Family.tools,
+    (_) => const TransferPage(),
   ),
 ];
 

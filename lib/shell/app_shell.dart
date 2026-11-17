@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import '../core/modules.dart';
 import '../core/theme.dart';
 import '../modules/calendar/event_editor_page.dart';
+import '../modules/docs/document_editor_page.dart';
 import '../modules/music/mini_player.dart';
 import '../modules/notes/notes_page.dart';
 import '../modules/tasks/organizer_store.dart';
@@ -140,10 +141,16 @@ class _AppShellState extends State<AppShell> {
               },
             ),
             ListTile(
-              enabled: false,
               leading: ModuleIcon(moduleById('doc_editor'), size: 40),
               title: const Text('Nouveau document'),
-              trailing: const SoonBadge(),
+              onTap: () {
+                Navigator.pop(sheet);
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const DocumentEditorPage(),
+                  ),
+                );
+              },
             ),
           ],
         ),
