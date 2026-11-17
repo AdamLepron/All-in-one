@@ -16,6 +16,7 @@ import 'package:all_in_one/modules/music/music_controller.dart';
 import 'package:all_in_one/modules/music/now_playing.dart';
 import 'package:all_in_one/modules/music/song.dart';
 import 'package:all_in_one/modules/notes/notes_store.dart';
+import 'package:all_in_one/modules/photo/photo_page.dart';
 import 'package:all_in_one/modules/qr/qr_page.dart';
 import 'package:all_in_one/modules/recorder/recorder_controller.dart';
 import 'package:all_in_one/modules/recorder/recorder_page.dart';
@@ -652,6 +653,18 @@ void main() {
     expect(find.text('Doublons'), findsNothing);
     expect(find.textContaining('Corbeille ·'), findsOneWidget);
     await shot('44_cleaner_after');
+    await close();
+
+    // Photo editor module: lists the library's photos, not its videos.
+    await open(const PhotoPage());
+    expect(
+      find.textContaining("L'original n'est jamais modifié"),
+      findsOneWidget,
+    );
+    expect(
+      find.byType(MediaThumb),
+      findsNWidgets(library.items.where((m) => !m.video).length),
+    );
     await close();
 
     // Dark AMOLED theme.

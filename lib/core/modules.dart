@@ -12,6 +12,7 @@ import '../modules/sensors/sensors_page.dart';
 import '../modules/converter/converter_page.dart';
 import '../modules/equalizer/equalizer_page.dart';
 import '../modules/files/files_page.dart';
+import '../modules/photo/photo_page.dart';
 import '../modules/reader/reader_page.dart';
 import '../modules/gallery/gallery_page.dart';
 import '../modules/video/video_page.dart';
@@ -81,12 +82,13 @@ final modules = <AppModule>[
     Family.media,
     (_) => const EqualizerPage(),
   ),
-  const AppModule(
+  AppModule(
     'photo_editor',
     'Éditeur photo',
     'Retouche et filtres',
     Icons.auto_fix_high_rounded,
     Family.media,
+    (_) => const PhotoPage(),
   ),
   const AppModule(
     'video_editor',

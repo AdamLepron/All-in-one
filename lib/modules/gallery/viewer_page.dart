@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/settings.dart';
 import '../../core/util.dart';
+import '../photo/photo_editor_page.dart';
 import '../video/video_player_page.dart';
 import 'media_grid.dart';
 import 'media_library.dart';
@@ -210,6 +211,17 @@ class _ViewerPageState extends State<ViewerPage> {
                           color: favorite ? const Color(0xFFFF5C7A) : white,
                           onTap: () => settings.toggleFavoriteMedia(media.key),
                         ),
+                        if (!media.video)
+                          _Action(
+                            icon: Icons.tune_rounded,
+                            label: 'Modifier',
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) =>
+                                    PhotoEditorPage(path: media.path),
+                              ),
+                            ),
+                          ),
                         _Action(
                           icon: Icons.share_outlined,
                           label: 'Partager',
