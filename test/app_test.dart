@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:all_in_one/core/settings.dart';
 import 'package:all_in_one/main.dart';
 import 'package:all_in_one/modules/calendar/calendar_page.dart';
+import 'package:all_in_one/modules/cleaner/cleaner_page.dart';
 import 'package:all_in_one/modules/clock/clock_controller.dart';
 import 'package:all_in_one/modules/clock/clock_page.dart';
 import 'package:all_in_one/modules/equalizer/equalizer_controller.dart';
@@ -18,6 +19,8 @@ import 'package:all_in_one/modules/notes/notes_store.dart';
 import 'package:all_in_one/modules/qr/qr_page.dart';
 import 'package:all_in_one/modules/recorder/recorder_controller.dart';
 import 'package:all_in_one/modules/recorder/recorder_page.dart';
+import 'package:all_in_one/modules/scanner/scan_store.dart';
+import 'package:all_in_one/modules/scanner/scanner_page.dart';
 import 'package:all_in_one/modules/sensors/sensors_page.dart';
 import 'package:all_in_one/modules/tasks/organizer_store.dart';
 import 'package:all_in_one/modules/tasks/tasks_page.dart';
@@ -88,6 +91,26 @@ void main() {
       );
       await File('${tmp.path}/Documents/rapport.docx')
           .writeAsString('x' * 64000);
+      for (final (i, title, pages, text) in [
+        (
+          1,
+          'Facture électricité',
+          2,
+          'Facture électricité novembre 2026 montant 84,20 euros',
+        ),
+        (
+          2,
+          'Contrat de location',
+          5,
+          'Contrat de location entre les soussignés',
+        ),
+      ]) {
+        final dir = await Directory('${parent.path}/scans/$i')
+            .create(recursive: true);
+        await File('${dir.path}/scan.json').writeAsString(
+          '{"title": "$title", "date": ${DateTime.now().millisecondsSinceEpoch - i * 86400000}, "pages": $pages, "text": "$text"}',
+        );
+      }
       await Directory('${parent.path}/recordings').create();
       await File('${parent.path}/recordings/Idée de refrain.m4a')
           .writeAsString('x' * 310000);
@@ -146,6 +169,10 @@ void main() {
           ),
           ChangeNotifierProvider(create: (_) => FilesClipboard()),
           ChangeNotifierProvider(create: (_) => ClockController()),
+          ChangeNotifierProvider(
+            create: (_) =>
+                ScanStore(directory: () async => '${tmp.parent.path}/scans'),
+          ),
           ChangeNotifierProvider(
             create: (_) => RecorderController(
               directory: () async => '${tmp.parent.path}/recordings',
@@ -434,6 +461,11 @@ void main() {
 
     // Step 5 tools, each opened directly.
     Future<void> open(Widget page) async {
+      // Test time does not flow, so messages would stay over the buttons.
+      tester
+          .state<ScaffoldMessengerState>(find.byType(ScaffoldMessenger).first)
+          .clearSnackBars();
+      await tester.pumpAndSettle();
       Navigator.of(tester.element(find.byType(AppShell)))
           .push(MaterialPageRoute<void>(builder: (_) => page));
       await settle();
@@ -566,6 +598,61 @@ void main() {
     expect(find.text("Aujourd'hui"), findsWidgets);
     expect(find.text("Réunion d'équipe"), findsOneWidget);
     await shot('40_home_today');
+
+    // Scanner library: search looks inside the recognised text.
+    await open(const ScannerPage());
+    expect(find.text('Contrat de location'), findsOneWidget);
+    await shot('41_scanner');
+    await tester.enterText(find.byType(TextField), 'euros');
+    await tester.pumpAndSettle();
+    expect(find.text('Facture électricité'), findsOneWidget);
+    expect(find.text('Contrat de location'), findsNothing);
+    await close();
+
+    // Cleaner on a folder with duplicates and an old download.
+    final junk = await tester.runAsync(() async {
+      final dir = await Directory('${tmp.parent.path}/Stockage').create();
+      await Directory('${dir.path}/Photos/Sauvegarde').create(recursive: true);
+      await Directory('${dir.path}/Download').create();
+      await File('${dir.path}/Photos/vacances.jpg')
+          .writeAsString('p' * 3400000);
+      await File('${dir.path}/Photos/Sauvegarde/vacances.jpg')
+          .writeAsString('p' * 3400000);
+      await File('${dir.path}/Download/vacances (1).jpg')
+          .writeAsString('p' * 3400000);
+      final old = File('${dir.path}/Download/notice.pdf');
+      await old.writeAsString('n' * 1800000);
+      await old.setLastModified(
+        DateTime.now().subtract(const Duration(days: 200)),
+      );
+      await File('${dir.path}/Download/jeu.apk').writeAsString('a' * 62000000);
+      await File('${dir.path}/journal.log').writeAsString('l' * 240000);
+      return dir;
+    });
+    await open(
+      CleanerPage(
+        root: junk!.path,
+        trash: Trash('${junk.path}/.AllInOneTrash'),
+      ),
+    );
+    expect(find.text('Doublons'), findsOneWidget);
+    expect(find.text('Gros fichiers'), findsOneWidget);
+    await shot('42_cleaner');
+    await tester.tap(find.text('Doublons'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Original'), findsOneWidget);
+    await shot('43_cleaner_review');
+    await tester.tap(find.text('Mettre à la corbeille'));
+    await settle();
+    expect(
+      File('${junk.path}/Photos/vacances.jpg').existsSync(),
+      true,
+    ); // original kept
+    expect(File('${junk.path}/Download/vacances (1).jpg').existsSync(), false);
+    expect(find.text('Doublons'), findsNothing);
+    expect(find.textContaining('Corbeille ·'), findsOneWidget);
+    await shot('44_cleaner_after');
+    await close();
 
     // Dark AMOLED theme.
     settings

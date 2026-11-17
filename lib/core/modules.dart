@@ -3,7 +3,9 @@ import 'package:material_ui/material_ui.dart';
 import '../modules/calculator/calculator_page.dart';
 import '../modules/calendar/calendar_page.dart';
 import '../modules/tasks/tasks_page.dart';
+import '../modules/cleaner/cleaner_page.dart';
 import '../modules/clock/clock_page.dart';
+import '../modules/scanner/scanner_page.dart';
 import '../modules/qr/qr_page.dart';
 import '../modules/recorder/recorder_page.dart';
 import '../modules/sensors/sensors_page.dart';
@@ -133,12 +135,13 @@ final modules = <AppModule>[
     Family.productivity,
     (_) => const NotesPage(),
   ),
-  const AppModule(
+  AppModule(
     'scanner',
     'Scanner',
     'Documents et OCR',
     Icons.document_scanner_rounded,
     Family.productivity,
+    (_) => const ScannerPage(),
   ),
   AppModule(
     'tasks',
@@ -197,12 +200,13 @@ final modules = <AppModule>[
     Family.tools,
     (_) => const SensorsPage(),
   ),
-  const AppModule(
+  AppModule(
     'cleaner',
     'Nettoyeur',
     'Libérer du stockage',
     Icons.cleaning_services_rounded,
     Family.tools,
+    (_) => const CleanerPage(),
   ),
   const AppModule(
     'transfer',

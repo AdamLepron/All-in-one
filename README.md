@@ -13,8 +13,9 @@ documents, notes, fichiers et utilitaires. Développée avec Flutter.
 | 4 — Documents et égaliseur | Lecteur de documents (bibliothèque, PDF en défilement continu avec zoom et mode nuit, fichiers texte, reprise), égaliseur (bandes, préréglages, balance gauche/droite, basses, élargissement, amplification) | Livrée (0.4.0) |
 | 5 — Outils et enregistreur | Lecteur QR (scan, création, historique), horloge (fuseaux, minuteur, chronomètre), outils capteurs (lampe, boussole, niveau, règle), enregistreur audio | Livrée (0.5.0) |
 | 6 — Tâches et agenda | Tâches (saisie en langage naturel, priorités, listes, répétition, glisser pour terminer ou reporter), agenda (vue mois et planning, événements répétés, agendas du téléphone en lecture), rappels par notification | Livrée (0.6.0) |
+| 7 — Scanner et nettoyeur | Scanner de documents (détection des bords, multipage, PDF, texte reconnu et cherchable), nettoyeur (doublons, gros fichiers, téléchargements et captures anciens, APK, fichiers temporaires, corbeille) | Livrée (0.7.0) |
 
-Les 6 autres modules apparaissent dans l'application avec l'étiquette « Bientôt ».
+Les 4 autres modules apparaissent dans l'application avec l'étiquette « Bientôt ».
 
 ## Structure
 

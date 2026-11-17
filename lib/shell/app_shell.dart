@@ -131,18 +131,20 @@ class _AppShellState extends State<AppShell> {
                 moduleById('recorder').open(context);
               },
             ),
-            for (final id in const ['doc_editor', 'scanner'])
-              ListTile(
-                enabled: false,
-                leading: ModuleIcon(moduleById(id), size: 40),
-                title: Text(
-                  const {
-                    'doc_editor': 'Nouveau document',
-                    'scanner': 'Scanner un document',
-                  }[id]!,
-                ),
-                trailing: const SoonBadge(),
-              ),
+            ListTile(
+              leading: ModuleIcon(moduleById('scanner'), size: 40),
+              title: const Text('Scanner un document'),
+              onTap: () {
+                Navigator.pop(sheet);
+                moduleById('scanner').open(context);
+              },
+            ),
+            ListTile(
+              enabled: false,
+              leading: ModuleIcon(moduleById('doc_editor'), size: 40),
+              title: const Text('Nouveau document'),
+              trailing: const SoonBadge(),
+            ),
           ],
         ),
       ),

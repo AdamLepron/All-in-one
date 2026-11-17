@@ -7,6 +7,8 @@ import '../modules/music/music_controller.dart';
 import '../modules/music/music_page.dart';
 import '../modules/notes/notes_page.dart';
 import '../modules/notes/notes_store.dart';
+import '../modules/scanner/scan_store.dart';
+import '../modules/scanner/scanner_page.dart';
 import '../modules/tasks/organizer_store.dart';
 import '../modules/tasks/tasks_page.dart';
 import 'widgets.dart';
@@ -44,6 +46,9 @@ class _SearchPageState extends State<SearchPage> {
               )
               .toList();
     final noteHits = store.search(q);
+    final scanHits = q.isEmpty
+        ? const <Scan>[]
+        : context.watch<ScanStore>().search(q).take(6).toList();
     final taskHits = q.isEmpty
         ? const <Task>[]
         : context
@@ -92,7 +97,8 @@ class _SearchPageState extends State<SearchPage> {
                 : moduleHits.isEmpty &&
                       noteHits.isEmpty &&
                       songHits.isEmpty &&
-                      taskHits.isEmpty
+                      taskHits.isEmpty &&
+                      scanHits.isEmpty
                 ? _Hint(
                     icon: Icons.search_off,
                     text: 'Aucun résultat pour « ${_query.trim()} »',
@@ -114,6 +120,24 @@ class _SearchPageState extends State<SearchPage> {
                         SongTile(s, onTap: () => music.play(songHits, i)),
                       if (taskHits.isNotEmpty) const _GroupLabel('Tâches'),
                       for (final t in taskHits) TaskTile(t),
+                      if (scanHits.isNotEmpty) const _GroupLabel('Scans'),
+                      for (final scan in scanHits)
+                        ListTile(
+                          leading: ModuleIcon(moduleById('scanner'), size: 40),
+                          title: Text(
+                            scan.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            '${scan.pages} page${scan.pages > 1 ? 's' : ''} · ${relativeDate(scan.date)}',
+                          ),
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => ScanDetailPage(scan: scan),
+                            ),
+                          ),
+                        ),
                       if (noteHits.isNotEmpty) const _GroupLabel('Notes'),
                       for (final n in noteHits)
                         ListTile(

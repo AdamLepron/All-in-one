@@ -14,6 +14,7 @@ import 'modules/gallery/media_library.dart';
 import 'modules/music/music_controller.dart';
 import 'modules/notes/notes_store.dart';
 import 'modules/recorder/recorder_controller.dart';
+import 'modules/scanner/scan_store.dart';
 import 'modules/tasks/organizer_store.dart';
 import 'shell/app_shell.dart';
 
@@ -47,6 +48,7 @@ Future<void> main() async {
         ChangeNotifierProvider(create: (_) => FilesClipboard()),
         ChangeNotifierProvider(create: (_) => ClockController()),
         ChangeNotifierProvider(create: (_) => RecorderController()),
+        ChangeNotifierProvider(create: (_) => ScanStore()..load()),
         ChangeNotifierProvider(
           create: (_) => MediaLibrary()..load(request: false),
         ),
