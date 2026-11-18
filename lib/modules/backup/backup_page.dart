@@ -11,6 +11,7 @@ import '../../core/settings.dart';
 import '../../core/util.dart';
 import '../files/file_ops.dart';
 import '../files/files_ui.dart';
+import '../notes/note_files.dart';
 import '../notes/notes_store.dart';
 import '../recorder/recorder_controller.dart';
 import '../scanner/scan_store.dart';
@@ -86,6 +87,7 @@ class _BackupPageState extends State<BackupPage> {
     final recorder = context.read<RecorderController>();
     final scansDir = await scans.rootDirectory;
     final recordingsDir = await recorder.directory;
+    final noteFilesDir = await NoteFiles.path();
     if (!mounted) throw StateError('closed');
     return BackupService(
       notes: context.read<NotesStore>(),
@@ -93,6 +95,7 @@ class _BackupPageState extends State<BackupPage> {
       settings: context.read<AppSettings>(),
       scansDir: scansDir,
       recordingsDir: recordingsDir,
+      noteFilesDir: noteFilesDir,
     );
   }
 

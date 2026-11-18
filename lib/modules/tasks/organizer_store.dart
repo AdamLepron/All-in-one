@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
@@ -60,12 +62,20 @@ class Task {
     this.done = false,
     this.doneAt,
     this.repeat = Repeat.none,
-  });
+    this.parentId,
+    List<String>? labels,
+  }) : labels = labels ?? [];
 
   int? id;
   String title;
   String notes;
   DateTime? due;
+
+  /// Id of the task this one is a step of; null for a main task.
+  int? parentId;
+
+  /// Free tags such as "maison" or "travail".
+  List<String> labels;
 
   /// False when only the day matters.
   bool hasTime;
@@ -94,6 +104,8 @@ class Task {
     'done': done ? 1 : 0,
     'done_at': doneAt?.millisecondsSinceEpoch,
     'repeat_rule': repeat.index,
+    'parent_id': parentId,
+    'labels': jsonEncode(labels),
   };
 
   static Task fromMap(Map<String, Object?> m) => Task(
@@ -111,7 +123,19 @@ class Task {
         ? null
         : DateTime.fromMillisecondsSinceEpoch(m['done_at'] as int),
     repeat: Repeat.values[m['repeat_rule'] as int],
+    // Absent from databases and backups made before version 1.3.
+    parentId: m['parent_id'] as int?,
+    labels: _labelsOf(m['labels']),
   );
+
+  static List<String> _labelsOf(Object? raw) {
+    if (raw is! String || raw.isEmpty) return [];
+    try {
+      return [for (final l in jsonDecode(raw) as List) l as String];
+    } on Object {
+      return [];
+    }
+  }
 }
 
 class Event {
@@ -206,14 +230,23 @@ class OrganizerStore extends ChangeNotifier {
   static Future<OrganizerStore> load({String file = 'organizer.db'}) async {
     final db = await openDatabase(
       p.join(await getDatabasesPath(), file),
-      version: 1,
+      version: 2,
+      onUpgrade: (db, from, _) async {
+        if (from < 2) {
+          await db.execute('ALTER TABLE tasks ADD COLUMN parent_id INTEGER');
+          await db.execute(
+            "ALTER TABLE tasks ADD COLUMN labels TEXT NOT NULL DEFAULT '[]'",
+          );
+        }
+      },
       onCreate: (db, _) async {
         await db.execute(
           'CREATE TABLE tasks(id INTEGER PRIMARY KEY AUTOINCREMENT, '
           'title TEXT NOT NULL, notes TEXT NOT NULL, due INTEGER, '
           'has_time INTEGER NOT NULL, priority INTEGER NOT NULL, '
           'list_name TEXT NOT NULL, done INTEGER NOT NULL, done_at INTEGER, '
-          'repeat_rule INTEGER NOT NULL)',
+          'repeat_rule INTEGER NOT NULL, parent_id INTEGER, '
+          "labels TEXT NOT NULL DEFAULT '[]')",
         );
         await db.execute(
           'CREATE TABLE events(id INTEGER PRIMARY KEY AUTOINCREMENT, '
@@ -228,6 +261,9 @@ class OrganizerStore extends ChangeNotifier {
     await store._reload();
     return store;
   }
+
+  /// Reads the database again, after another part of the app changed it.
+  Future<void> reload() => _reload();
 
   Future<void> _reload() async {
     tasks = (await _db.query('tasks')).map(Task.fromMap).toList();
@@ -246,12 +282,36 @@ class OrganizerStore extends ChangeNotifier {
   }
 
   /// Open tasks ordered by date, then priority; undated ones come last.
-  List<Task> get open => tasks.where((t) => !t.done).toList()..sort(_byDue);
+  List<Task> get open =>
+      tasks.where((t) => !t.done && t.parentId == null).toList()..sort(_byDue);
 
-  List<Task> get completed => tasks.where((t) => t.done).toList()
-    ..sort(
-      (a, b) => (b.doneAt ?? DateTime(0)).compareTo(a.doneAt ?? DateTime(0)),
-    );
+  /// The steps of [parent], in the order they were added.
+  List<Task> subtasks(Task parent) => [
+    for (final t in tasks)
+      if (parent.id != null && t.parentId == parent.id) t,
+  ]..sort((a, b) => a.id!.compareTo(b.id!));
+
+  /// Every label in use, alphabetically.
+  List<String> get labels {
+    final all = {for (final t in tasks) ...t.labels}.toList();
+    return all..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+  }
+
+  /// Adds a step to [parent]; steps of steps are not allowed.
+  Future<Task?> addSubtask(Task parent, String title) async {
+    final name = title.trim();
+    if (name.isEmpty || parent.id == null || parent.parentId != null) {
+      return null;
+    }
+    final step = Task(title: name, list: parent.list, parentId: parent.id);
+    await saveTask(step);
+    return step;
+  }
+
+  List<Task> get completed =>
+      tasks.where((t) => t.done && t.parentId == null).toList()..sort(
+        (a, b) => (b.doneAt ?? DateTime(0)).compareTo(a.doneAt ?? DateTime(0)),
+      );
 
   static int _byDue(Task a, Task b) {
     final ad = a.due, bd = b.due;
@@ -287,6 +347,7 @@ class OrganizerStore extends ChangeNotifier {
         task.title,
         'Tâche à faire',
         task.due!,
+        taskId: task.id,
       );
     } else {
       await Reminders.cancel(_taskReminderId(task));
@@ -302,28 +363,52 @@ class OrganizerStore extends ChangeNotifier {
       ..doneAt = done ? DateTime.now() : null;
     await saveTask(task);
     if (done && task.repeat != Repeat.none && task.due != null) {
-      await saveTask(
-        Task(
-          title: task.title,
-          notes: task.notes,
-          due: task.repeat.next(task.due!),
-          hasTime: task.hasTime,
-          priority: task.priority,
-          list: task.list,
-          repeat: task.repeat,
-        ),
+      final next = Task(
+        title: task.title,
+        notes: task.notes,
+        due: task.repeat.next(task.due!),
+        hasTime: task.hasTime,
+        priority: task.priority,
+        list: task.list,
+        repeat: task.repeat,
+        labels: [...task.labels],
       );
+      final steps = subtasks(task);
+      await saveTask(next);
+      // The steps start again, undone, with the next occurrence.
+      for (final step in steps) {
+        await saveTask(
+          Task(
+            title: step.title,
+            list: step.list,
+            parentId: next.id,
+            labels: [...step.labels],
+          ),
+        );
+      }
     }
   }
 
   Future<void> deleteTask(Task task) async {
+    for (final step in subtasks(task)) {
+      await _db.delete('tasks', where: 'id = ?', whereArgs: [step.id]);
+      await Reminders.cancel(_taskReminderId(step));
+    }
     await _db.delete('tasks', where: 'id = ?', whereArgs: [task.id]);
     await Reminders.cancel(_taskReminderId(task));
     await _reload();
   }
 
   Future<void> clearCompleted() async {
+    // Steps of a finished task go with it.
+    final doneIds = [
+      for (final t in tasks)
+        if (t.done && t.parentId == null) t.id,
+    ];
     await _db.delete('tasks', where: 'done = 1');
+    for (final id in doneIds) {
+      await _db.delete('tasks', where: 'parent_id = ?', whereArgs: [id]);
+    }
     await _reload();
   }
 

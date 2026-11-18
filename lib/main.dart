@@ -17,6 +17,7 @@ import 'modules/notes/notes_store.dart';
 import 'modules/recorder/recorder_controller.dart';
 import 'modules/scanner/scan_store.dart';
 import 'modules/tasks/organizer_store.dart';
+import 'modules/tasks/reminder_actions.dart';
 import 'shell/app_shell.dart';
 
 Future<void> main() async {
@@ -25,10 +26,15 @@ Future<void> main() async {
   CrashLog.install();
   final settings = await AppSettings.load();
   final notes = await NotesStore.open();
-  await Reminders.init();
+  await Reminders.init(background: reminderBackground);
   final organizer = await OrganizerStore.load();
   // Not awaited: re-arming reminders must not delay the first frame.
   organizer.refreshReminders();
+  // Buttons of a reminder pressed while the app is open or in the background.
+  Reminders.onAction = (action, payload) =>
+      handleReminderAction(organizer, action, payload);
+  // A reminder's button may have changed the database from another isolate.
+  AppLifecycleListener(onResume: organizer.reload);
   // Media notification and lock-screen controls.
   await JustAudioBackground.init(
     androidNotificationChannelId: 'com.allinone.all_in_one.audio',

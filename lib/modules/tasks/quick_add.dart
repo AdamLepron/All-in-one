@@ -1,7 +1,16 @@
 /// Result of reading a line such as "appeler Paul demain 9h urgent".
 class QuickTask {
-  QuickTask(this.title, this.due, this.hasTime, this.priority);
+  QuickTask(
+    this.title,
+    this.due,
+    this.hasTime,
+    this.priority, [
+    this.labels = const [],
+  ]);
   final String title;
+
+  /// Words typed with a leading "#", without it.
+  final List<String> labels;
   final DateTime? due;
   final bool hasTime;
 
@@ -53,6 +62,20 @@ QuickTask parseQuickTask(String input, DateTime now) {
     if (match != null) text = text.replaceRange(match.start, match.end, ' ');
     return match;
   }
+
+  // Labels: "#maison"
+  final labels = <String>[];
+  for (final m in RegExp(
+    r'(?<=\s)#([\p{L}\p{N}_-]+)(?=\s)',
+    unicode: true,
+  ).allMatches(text).toList()) {
+    final label = m[1]!.toLowerCase();
+    if (!labels.contains(label)) labels.add(label);
+  }
+  text = text.replaceAll(
+    RegExp(r'(?<=\s)#[\p{L}\p{N}_-]+(?=\s)', unicode: true),
+    ' ',
+  );
 
   // Priority
   if (take(r'(?<=\s)(urgent|urgente|!!!)(?=\s)') != null) {
@@ -156,5 +179,5 @@ QuickTask parseQuickTask(String input, DateTime now) {
           hour ?? 0,
           hour == null ? 0 : minute,
         );
-  return QuickTask(title, due, hour != null, priority);
+  return QuickTask(title, due, hour != null, priority, labels);
 }

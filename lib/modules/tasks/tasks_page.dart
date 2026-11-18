@@ -51,6 +51,9 @@ class TasksPage extends StatefulWidget {
 
 class _TasksPageState extends State<TasksPage> {
   _View _view = _View.today;
+
+  /// Only tasks carrying this label are shown; null for all.
+  String? _label;
   final _input = TextEditingController();
 
   @override
@@ -75,6 +78,7 @@ class _TasksPageState extends State<TasksPage> {
         due: due,
         hasTime: parsed.hasTime,
         priority: parsed.priority,
+        labels: parsed.labels,
       ),
     );
   }
@@ -85,7 +89,11 @@ class _TasksPageState extends State<TasksPage> {
     final scheme = Theme.of(context).colorScheme;
     final now = DateTime.now();
     final today = dayOf(now);
-    final open = store.open;
+    final label = store.labels.contains(_label) ? _label : null;
+    final open = [
+      for (final t in store.open)
+        if (label == null || t.labels.contains(label)) t,
+    ];
 
     // Sections of the current view: heading and tasks.
     final sections = <(String, List<Task>)>[];
@@ -117,7 +125,11 @@ class _TasksPageState extends State<TasksPage> {
           if (items.isNotEmpty) sections.add((list, items));
         }
       case _View.done:
-        if (store.completed.isNotEmpty) sections.add(('', store.completed));
+        final finished = [
+          for (final t in store.completed)
+            if (label == null || t.labels.contains(label)) t,
+        ];
+        if (finished.isNotEmpty) sections.add(('', finished));
     }
     final preview = _input.text.trim().isEmpty
         ? null
@@ -163,6 +175,28 @@ class _TasksPageState extends State<TasksPage> {
               },
             ),
           ),
+          if (store.labels.isNotEmpty)
+            SizedBox(
+              height: 44,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                children: [
+                  for (final l in store.labels)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: FilterChip(
+                        avatar: const Icon(Icons.sell_outlined, size: 16),
+                        label: Text(l),
+                        selected: l == label,
+                        showCheckmark: false,
+                        onSelected: (on) =>
+                            setState(() => _label = on ? l : null),
+                      ),
+                    ),
+                ],
+              ),
+            ),
           Expanded(
             child: sections.isEmpty
                 ? Center(
@@ -231,7 +265,9 @@ class _TasksPageState extends State<TasksPage> {
                     children: [
                       // Shows what was understood before the task is created.
                       if (preview != null &&
-                          (preview.due != null || preview.priority > 0))
+                          (preview.due != null ||
+                              preview.priority > 0 ||
+                              preview.labels.isNotEmpty))
                         Padding(
                           padding: const EdgeInsets.only(left: 4, bottom: 6),
                           child: Wrap(
@@ -248,6 +284,12 @@ class _TasksPageState extends State<TasksPage> {
                                     ),
                                   ),
                                   color: scheme.primary,
+                                ),
+                              for (final l in preview.labels)
+                                _Pill(
+                                  icon: Icons.sell_outlined,
+                                  label: l,
+                                  color: scheme.secondary,
                                 ),
                               if (preview.priority > 0)
                                 _Pill(
@@ -268,7 +310,7 @@ class _TasksPageState extends State<TasksPage> {
                               textCapitalization: TextCapitalization.sentences,
                               textInputAction: TextInputAction.done,
                               decoration: const InputDecoration(
-                                hintText: 'Ajouter une tâche…',
+                                hintText: 'Ajouter une tâche… (#étiquette)',
                                 isDense: true,
                               ),
                             ),
@@ -351,10 +393,14 @@ class TaskTile extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final color = priorityColors[task.priority];
     final overdue = task.isOverdue(DateTime.now());
+    final steps = store.subtasks(task);
+    final stepsDone = steps.where((t) => t.done).length;
     final details = [
       if (task.due != null) dueLabel(task),
+      if (steps.isNotEmpty) '$stepsDone/${steps.length} étapes',
       if (task.repeat != Repeat.none) task.repeat.label.toLowerCase(),
       if (task.list != 'Boîte de réception') task.list,
+      for (final l in task.labels) '#$l',
     ].join(' · ');
 
     final tile = ListTile(
@@ -468,11 +514,17 @@ class _TaskEditorState extends State<_TaskEditor> {
   late int _priority = _task.priority;
   late String _list = _task.list;
   late Repeat _repeat = _task.repeat;
+  late final List<String> _labels = [..._task.labels];
+
+  /// Steps typed for a task that is not saved yet.
+  final _pendingSteps = <String>[];
+  final _stepInput = TextEditingController();
 
   @override
   void dispose() {
     _title.dispose();
     _notes.dispose();
+    _stepInput.dispose();
     super.dispose();
   }
 
@@ -529,10 +581,38 @@ class _TaskEditorState extends State<_TaskEditor> {
       ..hasTime = _hasTime && _due != null
       ..priority = _priority
       ..list = _list
-      ..repeat = _due == null ? Repeat.none : _repeat;
+      ..repeat = _due == null ? Repeat.none : _repeat
+      ..labels = _labels;
     if (_task.hasTime) await Reminders.requestPermission();
     await store.saveTask(_task);
+    for (final step in _pendingSteps) {
+      await store.addSubtask(_task, step);
+    }
     navigator.pop();
+  }
+
+  Future<void> _addStep() async {
+    final text = _stepInput.text.trim();
+    if (text.isEmpty) return;
+    _stepInput.clear();
+    if (_task.id == null) {
+      setState(() => _pendingSteps.add(text));
+    } else {
+      await context.read<OrganizerStore>().addSubtask(_task, text);
+      if (mounted) setState(() {});
+    }
+  }
+
+  Future<void> _addLabel() async {
+    final name = await askName(
+      context,
+      title: 'Nouvelle étiquette',
+      action: 'Ajouter',
+    );
+    final label = name?.trim().toLowerCase().replaceAll(' ', '-') ?? '';
+    if (label.isNotEmpty && !_labels.contains(label)) {
+      setState(() => _labels.add(label));
+    }
   }
 
   @override
@@ -674,6 +754,99 @@ class _TaskEditorState extends State<_TaskEditor> {
                   ),
                 ],
               ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  for (final l in _labels)
+                    InputChip(
+                      avatar: const Icon(Icons.sell_outlined, size: 16),
+                      label: Text(l),
+                      deleteButtonTooltipMessage: 'Retirer l\'étiquette $l',
+                      onDeleted: () => setState(() => _labels.remove(l)),
+                    ),
+                  // Labels already used elsewhere are offered in one tap.
+                  for (final l in store.labels)
+                    if (!_labels.contains(l))
+                      ActionChip(
+                        label: Text('+ $l'),
+                        onPressed: () => setState(() => _labels.add(l)),
+                      ),
+                  ActionChip(
+                    avatar: const Icon(Icons.add, size: 16),
+                    label: const Text('Étiquette'),
+                    onPressed: _addLabel,
+                  ),
+                ],
+              ),
+              if (_task.parentId == null) ...[
+                const SizedBox(height: 12),
+                Text('Étapes', style: Theme.of(context).textTheme.titleSmall),
+                for (final step in store.subtasks(_task))
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: step.done,
+                        onChanged: (v) async {
+                          await store.setDone(step, v ?? false);
+                          if (mounted) setState(() {});
+                        },
+                      ),
+                      Expanded(
+                        child: Text(
+                          step.title,
+                          style: TextStyle(
+                            decoration: step.done
+                                ? TextDecoration.lineThrough
+                                : null,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Supprimer l\'étape',
+                        icon: const Icon(Icons.close, size: 18),
+                        onPressed: () async {
+                          await store.deleteTask(step);
+                          if (mounted) setState(() {});
+                        },
+                      ),
+                    ],
+                  ),
+                for (final (i, step) in _pendingSteps.indexed)
+                  Row(
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: Icon(Icons.check_box_outline_blank, size: 20),
+                      ),
+                      Expanded(child: Text(step)),
+                      IconButton(
+                        tooltip: 'Supprimer l\'étape',
+                        icon: const Icon(Icons.close, size: 18),
+                        onPressed: () =>
+                            setState(() => _pendingSteps.removeAt(i)),
+                      ),
+                    ],
+                  ),
+                TextField(
+                  controller: _stepInput,
+                  textCapitalization: TextCapitalization.sentences,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _addStep(),
+                  decoration: InputDecoration(
+                    hintText: 'Ajouter une étape',
+                    isDense: true,
+                    prefixIcon: const Icon(Icons.add),
+                    suffixIcon: IconButton(
+                      tooltip: 'Ajouter l\'étape',
+                      icon: const Icon(Icons.arrow_upward_rounded),
+                      onPressed: _addStep,
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 16),
               Row(
                 children: [

@@ -19,6 +19,7 @@ documents, notes, fichiers et utilitaires. Développée avec Flutter.
 | 10 — Éditeur vidéo | Montage : découpe, assemblage de plusieurs vidéos, vitesse de 0,25× à 4×, rotation, son d'origine coupé ou remplacé par une musique, export MP4 (H.264) avec progression | Livrée (1.0.0) |
 | 11 — Fiabilité et socle | Journal des incidents, grosses bibliothèques fluides, réception de fichiers/texte depuis les autres apps (Partager / Ouvrir avec), recherche universelle étendue (documents, fichiers, scans, rappels…), sauvegarde et restauration complètes, accessibilité (lecteur d'écran, texte agrandi) | Livrée (1.1.0) |
 | 12 — Écouter et regarder | Musique : accueil, playlists, file réordonnable, minuterie de sommeil, paroles (.lrc). Égaliseur : préréglages personnels, profil par appareil audio. Vidéo : sous-titres (.srt/.vtt), pistes audio, image dans l'image, lecture suivante, écoute en arrière-plan | Livrée (1.2.1) |
+| 13 — Organiser sa vie (notes et tâches) | Notes : cases à cocher cochables depuis la liste, mise en forme, dossiers, pièces jointes, corbeille 30 jours. Tâches : étapes, étiquettes (#mot), boutons « Terminé » et « Reporter 1 h » dans la notification | En cours (1.3.0) |
 
 Les 21 modules du cahier des charges sont désormais disponibles ; leurs fonctions les plus avancées (pistes multiples, transitions, titres animés, tableur, présentations) restent à venir.
 

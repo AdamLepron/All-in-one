@@ -1,23 +1,32 @@
 import 'dart:async';
 
+import 'package:file_picker/file_picker.dart';
+import 'package:open_filex/open_filex.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/util.dart';
+import '../docs/markdown_edit.dart';
+import 'note_files.dart';
 import 'notes_page.dart';
 import 'notes_store.dart';
 
 /// Full-screen note editor. Changes are saved automatically.
 class NoteEditorPage extends StatefulWidget {
-  const NoteEditorPage({super.key, this.note});
+  const NoteEditorPage({super.key, this.note, this.folder = ''});
   final Note? note;
+
+  /// Folder given to a new note.
+  final String folder;
 
   @override
   State<NoteEditorPage> createState() => _NoteEditorPageState();
 }
 
 class _NoteEditorPageState extends State<NoteEditorPage> {
-  late final Note _note = widget.note ?? Note();
+  late final Note _note = widget.note ?? Note(folder: widget.folder);
+  late final _history = TextHistory(_body);
+  final _focus = FocusNode();
   late final _title = TextEditingController(text: _note.title);
   late final _body = TextEditingController(text: _note.body);
   late final NotesStore _store;
@@ -52,9 +61,123 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
   @override
   void dispose() {
     _save();
+    _history.dispose();
+    _focus.dispose();
     _title.dispose();
     _body.dispose();
     super.dispose();
+  }
+
+  /// Applies a formatting edit to the body as a step of its own.
+  void _format(TextEditingValue Function(TextEditingValue) edit) {
+    _history.checkpoint();
+    _body.value = edit(_body.value);
+    _history.checkpoint();
+    _focus.requestFocus();
+    _onChanged();
+  }
+
+  Future<void> _attach() async {
+    final List<PlatformFile> picked;
+    try {
+      picked = await FilePicker.pickFiles();
+    } on Object {
+      return;
+    }
+    for (final f in picked) {
+      final path = f.path;
+      if (path == null) continue;
+      final name = await NoteFiles.add(path);
+      _note.attachments.add(name);
+    }
+    if (mounted) _onChanged();
+  }
+
+  Future<void> _removeAttachment(String name) async {
+    setState(() => _note.attachments.remove(name));
+    _dirty = true;
+    await _save();
+    // The file goes only once the note no longer refers to it.
+    await NoteFiles.remove([name]);
+  }
+
+  Future<void> _openAttachment(String name) async {
+    final file = await NoteFiles.file(name);
+    if (!mounted) return;
+    if (NoteFiles.isImage(name)) {
+      await showDialog<void>(
+        context: context,
+        builder: (dialog) => Dialog(
+          backgroundColor: Colors.black,
+          insetPadding: EdgeInsets.zero,
+          child: Stack(
+            children: [
+              InteractiveViewer(child: Center(child: Image.file(file))),
+              Positioned(
+                top: 4,
+                right: 4,
+                child: IconButton(
+                  tooltip: 'Fermer',
+                  color: Colors.white,
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(dialog),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    } else {
+      final r = await OpenFilex.open(file.path);
+      if (mounted && r.type != ResultType.done) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Aucune application ne peut ouvrir ce fichier'),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _chooseFolder() async {
+    final store = _store;
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      builder: (sheet) => SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const ListTile(title: Text('Dossier')),
+              ListTile(
+                leading: const Icon(Icons.folder_off_outlined),
+                title: const Text('Aucun dossier'),
+                selected: _note.folder.isEmpty,
+                onTap: () => Navigator.pop(sheet, ''),
+              ),
+              for (final f in store.folders)
+                ListTile(
+                  leading: const Icon(Icons.folder_outlined),
+                  title: Text(f),
+                  selected: _note.folder == f,
+                  onTap: () => Navigator.pop(sheet, f),
+                ),
+              ListTile(
+                leading: const Icon(Icons.create_new_folder_outlined),
+                title: const Text('Nouveau dossier…'),
+                onTap: () async {
+                  final name = await askNoteFolder(context);
+                  if (sheet.mounted) Navigator.pop(sheet, name?.trim());
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (choice == null) return;
+    _note.folder = choice;
+    _onChanged();
   }
 
   int get _wordCount => _body.text.trim().isEmpty
@@ -80,6 +203,22 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
               _note.pinned = !_note.pinned;
               _onChanged();
             },
+          ),
+          IconButton(
+            tooltip: _note.folder.isEmpty
+                ? 'Dossier'
+                : 'Dossier : ${_note.folder}',
+            icon: Icon(
+              _note.folder.isEmpty
+                  ? Icons.folder_open_outlined
+                  : Icons.folder_rounded,
+            ),
+            onPressed: _chooseFolder,
+          ),
+          IconButton(
+            tooltip: 'Joindre un fichier',
+            icon: const Icon(Icons.attach_file),
+            onPressed: _attach,
           ),
           IconButton(
             tooltip: 'Couleur',
@@ -125,6 +264,8 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                   const SizedBox(height: 8),
                   TextField(
                     controller: _body,
+                    focusNode: _focus,
+                    inputFormatters: [ListContinuation()],
                     onChanged: (_) => _onChanged(),
                     autofocus: widget.note == null,
                     textCapitalization: TextCapitalization.sentences,
@@ -138,6 +279,66 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                       border: InputBorder.none,
                       contentPadding: EdgeInsets.zero,
                     ),
+                  ),
+                  if (_note.attachments.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final name in _note.attachments)
+                          _AttachmentChip(
+                            name: name,
+                            onOpen: () => _openAttachment(name),
+                            onRemove: () => _removeAttachment(name),
+                          ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            // Formatting toolbar.
+            SizedBox(
+              height: 48,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                children: [
+                  _tool(
+                    Icons.undo,
+                    'Annuler',
+                    _history.canUndo ? () => setState(_history.undo) : null,
+                  ),
+                  _tool(
+                    Icons.redo,
+                    'Rétablir',
+                    _history.canRedo ? () => setState(_history.redo) : null,
+                  ),
+                  _tool(
+                    Icons.check_box_outlined,
+                    'Liste à cocher',
+                    () => _format(toggleChecklist),
+                  ),
+                  _tool(
+                    Icons.format_list_bulleted,
+                    'Liste à puces',
+                    () => _format(toggleBullets),
+                  ),
+                  _tool(
+                    Icons.format_bold,
+                    'Gras',
+                    () => _format((v) => toggleWrap(v, '**')),
+                  ),
+                  _tool(
+                    Icons.format_italic,
+                    'Italique',
+                    () => _format((v) => toggleWrap(v, '*')),
+                  ),
+                  _tool(
+                    Icons.title_rounded,
+                    'Titre',
+                    () => _format(cycleHeading),
                   ),
                 ],
               ),
@@ -167,6 +368,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       ),
     );
   }
+
+  Widget _tool(IconData icon, String label, VoidCallback? onTap) =>
+      IconButton(tooltip: label, icon: Icon(icon), onPressed: onTap);
 
   void _pickColor() {
     showModalBottomSheet<void>(
@@ -210,6 +414,37 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _AttachmentChip extends StatelessWidget {
+  const _AttachmentChip({
+    required this.name,
+    required this.onOpen,
+    required this.onRemove,
+  });
+  final String name;
+  final VoidCallback onOpen;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return InputChip(
+      avatar: Icon(
+        NoteFiles.isImage(name)
+            ? Icons.image_outlined
+            : Icons.description_outlined,
+        size: 18,
+      ),
+      label: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 200),
+        child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
+      ),
+      onPressed: onOpen,
+      deleteIcon: const Icon(Icons.close, size: 18),
+      deleteButtonTooltipMessage: 'Retirer la pièce jointe',
+      onDeleted: onRemove,
     );
   }
 }

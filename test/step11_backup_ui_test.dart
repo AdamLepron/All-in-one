@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:all_in_one/core/settings.dart';
 import 'package:all_in_one/core/theme.dart';
 import 'package:all_in_one/modules/backup/backup_page.dart';
+import 'package:all_in_one/modules/notes/note_files.dart';
 import 'package:all_in_one/modules/notes/notes_store.dart';
 import 'package:all_in_one/modules/recorder/recorder_controller.dart';
 import 'package:all_in_one/modules/scanner/scan_store.dart';
@@ -49,6 +50,7 @@ void main() {
       sqfliteFfiInit();
       databaseFactory = databaseFactoryFfi;
       tmp = Directory.systemTemp.createTempSync('backup_ui');
+      NoteFiles.locate = () async => '${tmp.path}/note_files';
       SharedPreferences.setMockInitialValues({});
       settings = AppSettings(await SharedPreferences.getInstance());
       await databaseFactory.deleteDatabase(
