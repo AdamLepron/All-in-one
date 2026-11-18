@@ -5,19 +5,23 @@ import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/platform.dart';
+import 'magnifier.dart';
+import 'sound_meter.dart';
 
 enum _Tool {
   torch('Lampe', Icons.flashlight_on_rounded),
   compass('Boussole', Icons.explore_rounded),
   level('Niveau', Icons.straighten_rounded),
-  ruler('Règle', Icons.square_foot_rounded);
+  ruler('Règle', Icons.square_foot_rounded),
+  sound('Sonomètre', Icons.graphic_eq_rounded),
+  magnifier('Loupe', Icons.zoom_in_rounded);
 
   const _Tool(this.label, this.icon);
   final String label;
   final IconData icon;
 }
 
-/// Torch, compass, spirit level and ruler.
+/// Torch, compass, spirit level, ruler, sound meter and magnifier.
 class SensorsPage extends StatefulWidget {
   const SensorsPage({super.key, this.initialTool = 0});
   final int initialTool;
@@ -38,8 +42,11 @@ class _SensorsPageState extends State<SensorsPage> {
         _Tool.compass => const _Compass(),
         _Tool.level => const _Level(),
         _Tool.ruler => const _Ruler(),
+        _Tool.sound => const SoundMeter(),
+        _Tool.magnifier => const LoupeView(),
       },
       bottomNavigationBar: NavigationBar(
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         selectedIndex: _tool.index,
         onDestinationSelected: (i) => setState(() => _tool = _Tool.values[i]),
         destinations: [

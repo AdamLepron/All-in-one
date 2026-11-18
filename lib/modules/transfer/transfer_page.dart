@@ -183,7 +183,39 @@ class _TransferSessionPageState extends State<TransferSessionPage> {
   late final TransferServer _server = TransferServer(
     files: widget.files,
     receiveDir: widget.receiveDir,
+    approve: widget.receiveDir == null ? null : _askApproval,
   );
+
+  /// Another device wants to send a file: the owner decides.
+  Future<UploadDecision> _askApproval(String from, String name) async {
+    if (!mounted) return UploadDecision.refuse;
+    final result = await showDialog<UploadDecision>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialog) => AlertDialog(
+        title: const Text('Accepter ce fichier ?'),
+        content: Text(
+          "L'appareil $from veut envoyer « $name » vers ce téléphone.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog, UploadDecision.refuse),
+            child: const Text('Refuser'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialog, UploadDecision.acceptAll),
+            child: const Text('Tout accepter'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialog, UploadDecision.accept),
+            child: const Text('Accepter'),
+          ),
+        ],
+      ),
+    );
+    return result ?? UploadDecision.refuse;
+  }
+
   List<String>? _addresses;
   String? _error;
   StreamSubscription<void>? _subscription;
@@ -400,4 +432,22 @@ class _TransferSessionPageState extends State<TransferSessionPage> {
             ),
     );
   }
+}
+
+/// Opens a sending session for [paths] (files only), from a file or gallery
+/// menu. Folders are skipped.
+Future<void> sendByWifi(BuildContext context, List<String> paths) async {
+  final files = <SharedFile>[];
+  for (final path in paths) {
+    final f = File(path);
+    if (await f.exists()) files.add(SharedFile(path, await f.length()));
+  }
+  if (!context.mounted) return;
+  if (files.isEmpty) {
+    showMessage(context, 'Choisissez des fichiers (pas des dossiers)');
+    return;
+  }
+  await Navigator.of(context).push(
+    MaterialPageRoute<void>(builder: (_) => TransferSessionPage(files: files)),
+  );
 }

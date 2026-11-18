@@ -10,6 +10,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../core/settings.dart';
 import '../../core/util.dart';
 import '../music/music_controller.dart';
+import '../transfer/transfer_page.dart';
 import '../reader/documents.dart';
 import 'archives.dart';
 import 'file_ops.dart';
@@ -428,6 +429,14 @@ class _FolderPageState extends State<FolderPage> {
                       PopupMenuItem(
                         value: _share,
                         child: const Text('Partager'),
+                      ),
+                      PopupMenuItem(
+                        value: () {
+                          final paths = _selected.toList();
+                          setState(_selected.clear);
+                          sendByWifi(context, paths);
+                        },
+                        child: const Text('Envoyer par Wi-Fi'),
                       ),
                       PopupMenuItem(
                         value: _compress,

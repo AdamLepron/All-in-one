@@ -130,7 +130,7 @@ void main() {
     /// clock, so alternate between the two until loading spinners are gone.
     Future<void> settle() async {
       var idle = 0;
-      for (var i = 0; i < 200 && idle < 40; i++) {
+      for (var i = 0; i < 500 && idle < 40; i++) {
         await tester.runAsync(
           () => Future<void>.delayed(const Duration(milliseconds: 20)),
         );

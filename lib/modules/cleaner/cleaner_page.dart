@@ -6,6 +6,7 @@ import '../../core/util.dart';
 import '../files/file_ops.dart';
 import '../files/files_page.dart' show TrashPage;
 import '../files/files_ui.dart';
+import 'blur.dart';
 import 'cleaner_scan.dart';
 
 const _icons = <CleanCategory, IconData>{
@@ -13,15 +14,25 @@ const _icons = <CleanCategory, IconData>{
   CleanCategory.large: Icons.sd_storage_outlined,
   CleanCategory.oldDownloads: Icons.download_outlined,
   CleanCategory.screenshots: Icons.screenshot_outlined,
+  CleanCategory.blurry: Icons.blur_on_rounded,
+  CleanCategory.messaging: Icons.forum_outlined,
   CleanCategory.apks: Icons.android_rounded,
   CleanCategory.junk: Icons.auto_delete_outlined,
 };
 
 /// Storage overview with suggestions of what to remove.
 class CleanerPage extends StatefulWidget {
-  const CleanerPage({super.key, this.root = storageRoot, this.trash});
+  const CleanerPage({
+    super.key,
+    this.root = storageRoot,
+    this.trash,
+    this.blurScore = blurScoreOfFile,
+  });
   final String root;
   final Trash? trash;
+
+  /// Rates the sharpness of a picture; replaced in tests.
+  final Future<double?> Function(String path)? blurScore;
 
   @override
   State<CleanerPage> createState() => _CleanerPageState();
@@ -56,6 +67,7 @@ class _CleanerPageState extends State<CleanerPage> {
     }
     final report = await analyzeStorage(
       widget.root,
+      blurScore: widget.blurScore,
       onProgress: (n) {
         if (mounted) setState(() => _examined = n);
       },
@@ -268,7 +280,13 @@ class _CleanerPageState extends State<CleanerPage> {
                           ),
                           trailing: Text(
                             formatBytes(
-                              category == CleanCategory.large
+                              // Reviewed items, none ticked in advance: the
+                              // size shown is of everything listed.
+                              const {
+                                    CleanCategory.large,
+                                    CleanCategory.blurry,
+                                    CleanCategory.messaging,
+                                  }.contains(category)
                                   ? report.items[category]!.fold(
                                       0,
                                       (s, i) => s + i.size,

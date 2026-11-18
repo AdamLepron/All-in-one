@@ -16,6 +16,14 @@ enum CleanCategory {
     'Dans Téléchargements depuis plus de 90 jours',
   ),
   screenshots("Captures d'écran anciennes", 'Captures de plus de 30 jours'),
+  blurry(
+    'Photos floues',
+    'Photos qui semblent ratées : à vérifier avant de supprimer',
+  ),
+  messaging(
+    'Médias des messageries',
+    'Photos, vidéos et fichiers reçus par WhatsApp ou Telegram depuis plus de 60 jours',
+  ),
   apks("Fichiers d'installation", 'Fichiers APK, inutiles une fois installés'),
   junk(
     'Fichiers temporaires',
@@ -71,6 +79,18 @@ class CleanReport {
 }
 
 const largeThreshold = 50 * 1000 * 1000;
+
+/// Folders where messaging apps store received media, under [root].
+List<String> messagingFolders(String root) => [
+  for (final f in const [
+    'Android/media/com.whatsapp/WhatsApp/Media',
+    'Android/media/com.whatsapp.w4b/WhatsApp Business/Media',
+    'WhatsApp/Media',
+    'Android/media/org.telegram.messenger/Telegram',
+    'Telegram',
+  ])
+    p.join(root, f),
+];
 const _junkExtensions = {
   '.tmp',
   '.temp',
@@ -101,10 +121,14 @@ Future<CleanReport> analyzeStorage(
   String root, {
   DateTime? now,
   void Function(int files)? onProgress,
+  Future<double?> Function(String path)? blurScore,
+  double blurLimit = 35,
+  int maxPhotosChecked = 800,
 }) async {
   final today = now ?? DateTime.now();
   final report = {for (final c in CleanCategory.values) c: <CleanItem>[]};
   final bySize = <int, List<(String, DateTime)>>{};
+  final photos = <CleanItem>[];
   var count = 0;
 
   /// Returns true when [dir] holds nothing at all.
@@ -141,6 +165,15 @@ Future<CleanReport> analyzeStorage(
         final ext = p.extension(path).toLowerCase();
         final lower = path.toLowerCase();
 
+        // Camera pictures are candidates for the blur check.
+        if (blurScore != null &&
+            const {'.jpg', '.jpeg', '.png', '.webp'}.contains(ext) &&
+            stat.size > 20 * 1024 &&
+            (lower.contains('/dcim/') || lower.contains('/pictures/')) &&
+            !lower.contains('/screenshots/')) {
+          photos.add(item);
+        }
+
         if (stat.size >= largeThreshold) {
           // Shown for review but never ticked by default.
           report[CleanCategory.large]!.add(
@@ -168,6 +201,60 @@ Future<CleanReport> analyzeStorage(
   }
 
   await walk(root, 0);
+
+  // Messaging apps keep what they receive under Android/media, which the
+  // general walk leaves alone; their folders are read one by one.
+  final old = today.subtract(const Duration(days: 60));
+  for (final folder in messagingFolders(root)) {
+    if (!await Directory(folder).exists()) continue;
+    try {
+      await for (final entity in Directory(
+        folder,
+      ).list(recursive: true, followLinks: false)) {
+        if (entity is! File) continue;
+        final name = p.basename(entity.path);
+        if (name.startsWith('.')) continue; // .nomedia and friends
+        // "Sent" files are the user's own copies: left out.
+        if (entity.path.contains('/Sent/') || entity.path.contains('/Envoy')) {
+          continue;
+        }
+        final FileStat stat;
+        try {
+          stat = await entity.stat();
+        } on FileSystemException {
+          continue;
+        }
+        if (stat.modified.isBefore(old) && stat.size > 0) {
+          report[CleanCategory.messaging]!.add(
+            CleanItem(
+              entity.path,
+              stat.size,
+              stat.modified,
+              preselected: false,
+            ),
+          );
+        }
+      }
+    } on FileSystemException {
+      continue;
+    }
+  }
+
+  // Blurry photos: the most recent ones are checked, a few at a time.
+  if (blurScore != null) {
+    photos.sort((a, b) => b.modified.compareTo(a.modified));
+    var checked = 0;
+    for (final photo in photos.take(maxPhotosChecked)) {
+      final score = await blurScore(photo.path);
+      checked++;
+      if (checked % 20 == 0) onProgress?.call(count + checked);
+      if (score != null && score < blurLimit) {
+        report[CleanCategory.blurry]!.add(
+          CleanItem(photo.path, photo.size, photo.modified, preselected: false),
+        );
+      }
+    }
+  }
 
   // Only files of equal size can be identical, so only those are hashed.
   var group = 0;

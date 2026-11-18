@@ -7,6 +7,7 @@ import '../files/files_ui.dart' show askName, showMessage;
 import 'media_grid.dart';
 import 'media_library.dart';
 import 'media_search.dart';
+import '../transfer/transfer_page.dart';
 import 'vault_page.dart';
 
 enum _Tab {
@@ -252,6 +253,15 @@ class MediaScaffold extends StatelessWidget {
                               },
                               child: const Text("Retirer de l'album"),
                             ),
+                          PopupMenuItem(
+                            value: () {
+                              selection.clear();
+                              sendByWifi(context, [
+                                for (final m in selected) m.path,
+                              ]);
+                            },
+                            child: const Text('Envoyer par Wi-Fi'),
+                          ),
                           PopupMenuItem(
                             value: () async {
                               selection.clear();

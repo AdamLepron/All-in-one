@@ -282,6 +282,37 @@ class MediaChannel {
   static Future<void> setVolume(double value) =>
       _quiet('setVolume', {'value': value});
 
+  /// Offers to save a Wi-Fi network (Android 11+); false when the phone
+  /// cannot do it, so the caller can show the password instead.
+  static Future<bool> addWifi({
+    required String ssid,
+    String password = '',
+    String security = 'wpa',
+    bool hidden = false,
+  }) => _flag('addWifi', {
+    'ssid': ssid,
+    'password': password,
+    'security': security,
+    'hidden': hidden,
+  });
+
+  static Future<bool> openWifiSettings() => _flag('wifiSettings', const {});
+
+  /// Opens the contacts app with a new contact filled in.
+  static Future<bool> addContact({
+    String? name,
+    String? phone,
+    String? email,
+    String? company,
+    String? address,
+  }) => _flag('addContact', {
+    'name': ?name,
+    'phone': ?phone,
+    'email': ?email,
+    'company': ?company,
+    'address': ?address,
+  });
+
   /// Blocks screenshots and previews of the app while [on].
   static Future<void> secure(bool on) => _quiet('secure', {'on': on});
 

@@ -127,6 +127,23 @@ class _CalculatorPageState extends State<CalculatorPage> {
     }
   }
 
+  /// Long press on the display copies the result (or the expression).
+  void _copyDisplay() {
+    final value = _preview ?? _expr;
+    if (value.isEmpty) return;
+    final text = value.replaceAll(' ', '').replaceAll('−', '-');
+    Clipboard.setData(ClipboardData(text: text));
+    HapticFeedback.mediumImpact();
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('$text copié'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+  }
+
   void _showError() {
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
@@ -143,7 +160,14 @@ class _CalculatorPageState extends State<CalculatorPage> {
     final landscape =
         MediaQuery.orientationOf(context) == Orientation.landscape;
     final scheme = Theme.of(context).colorScheme;
-    final display = _Display(expression: _expr, preview: _preview);
+    final display = Semantics(
+      onLongPressHint: 'Copier le résultat',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onLongPress: _copyDisplay,
+        child: _Display(expression: _expr, preview: _preview),
+      ),
+    );
     final standard = _KeyGrid(
       rows: _standardKeys,
       onPressed: _press,

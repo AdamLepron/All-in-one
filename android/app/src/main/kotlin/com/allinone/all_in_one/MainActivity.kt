@@ -250,6 +250,55 @@ class MainActivity : AudioServiceActivity() {
                 pipHeight = call.argument<Number>("h")?.toInt() ?: 9
                 result.success(enterPip())
             }
+            "addWifi" -> {
+                // Android 11+ shows its own "save this network?" dialog.
+                val ssid = call.argument<String>("ssid") ?: ""
+                val password = call.argument<String>("password") ?: ""
+                val security = call.argument<String>("security") ?: "wpa"
+                val hidden = call.argument<Boolean>("hidden") == true
+                result.success(
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && ssid.isNotEmpty() && security != "wep") {
+                        try {
+                            val builder = android.net.wifi.WifiNetworkSuggestion.Builder().setSsid(ssid).setIsHiddenSsid(hidden)
+                            if (security != "open" && password.isNotEmpty()) builder.setWpa2Passphrase(password)
+                            val intent = Intent(android.provider.Settings.ACTION_WIFI_ADD_NETWORKS)
+                                .putParcelableArrayListExtra(
+                                    android.provider.Settings.EXTRA_WIFI_NETWORK_LIST,
+                                    arrayListOf(builder.build()),
+                                )
+                            startActivity(intent)
+                            true
+                        } catch (e: Exception) {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                )
+            }
+            "wifiSettings" -> {
+                try {
+                    startActivity(Intent(android.provider.Settings.ACTION_WIFI_SETTINGS))
+                    result.success(true)
+                } catch (e: Exception) {
+                    result.success(false)
+                }
+            }
+            "addContact" -> {
+                // The contacts app opens with the fields filled in; the user saves.
+                try {
+                    val intent = Intent(Intent.ACTION_INSERT, android.provider.ContactsContract.Contacts.CONTENT_URI)
+                    call.argument<String>("name")?.let { intent.putExtra(android.provider.ContactsContract.Intents.Insert.NAME, it) }
+                    call.argument<String>("phone")?.let { intent.putExtra(android.provider.ContactsContract.Intents.Insert.PHONE, it) }
+                    call.argument<String>("email")?.let { intent.putExtra(android.provider.ContactsContract.Intents.Insert.EMAIL, it) }
+                    call.argument<String>("company")?.let { intent.putExtra(android.provider.ContactsContract.Intents.Insert.COMPANY, it) }
+                    call.argument<String>("address")?.let { intent.putExtra(android.provider.ContactsContract.Intents.Insert.POSTAL, it) }
+                    startActivity(intent)
+                    result.success(true)
+                } catch (e: Exception) {
+                    result.success(false)
+                }
+            }
             "secure" -> {
                 // Hides the window from screenshots and the recent-apps view.
                 if (call.argument<Boolean>("on") == true) {

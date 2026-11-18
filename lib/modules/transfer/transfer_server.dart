@@ -50,13 +50,36 @@ String safeFileName(String raw) {
   return name.isEmpty ? 'fichier' : name;
 }
 
+/// What the owner of this phone decides about files sent by another device.
+enum UploadDecision { accept, acceptAll, refuse }
+
+/// Asked before a file from another device is saved. [from] is the sender's
+/// network address.
+typedef UploadApproval = Future<UploadDecision> Function(
+  String from,
+  String fileName,
+);
+
 /// A small web server that lets any device on the same network, with or
 /// without this app, fetch the shared files or send files to this phone
 /// through a web page. Every address contains a random token, so only
 /// people given the link or the QR code can use it.
 class TransferServer {
-  TransferServer({this.files = const [], this.receiveDir, Random? random})
-    : token = _newToken(random ?? Random.secure());
+  TransferServer({
+    this.files = const [],
+    this.receiveDir,
+    this.approve,
+    this.approvalTimeout = const Duration(seconds: 45),
+    Random? random,
+  }) : token = _newToken(random ?? Random.secure());
+
+  /// When set, the first file of each sending device must be accepted by the
+  /// owner; without it every upload is accepted (the link already is secret).
+  final UploadApproval? approve;
+  final Duration approvalTimeout;
+
+  /// Devices the owner accepted everything from, for this session.
+  final _trusted = <String>{};
 
   /// Files offered for download, or empty when only receiving.
   final List<SharedFile> files;
@@ -205,6 +228,8 @@ class TransferServer {
     }
     await Directory(dir).create(recursive: true);
     var saved = 0;
+    var refused = false;
+    final from = request.connectionInfo?.remoteAddress.address ?? '?';
     await for (final part in request.cast<List<int>>().transform(
       MimeMultipartTransformer(boundary),
     )) {
@@ -218,6 +243,29 @@ class TransferServer {
       if (name.isEmpty) {
         await part.drain<void>(); // empty file field of the form
         continue;
+      }
+      if (refused) {
+        await part.drain<void>();
+        continue;
+      }
+      final ask = approve;
+      if (ask != null && !_trusted.contains(from)) {
+        UploadDecision decision;
+        try {
+          decision = await ask(
+            from,
+            safeFileName(name),
+          ).timeout(approvalTimeout);
+        } on Object {
+          // No answer in time: treated as a refusal.
+          decision = UploadDecision.refuse;
+        }
+        if (decision == UploadDecision.refuse) {
+          refused = true;
+          await part.drain<void>();
+          continue;
+        }
+        if (decision == UploadDecision.acceptAll) _trusted.add(from);
       }
       final target = await uniquePath(dir, safeFileName(name));
       final event = TransferEvent(p.basename(target), 0, upload: true);
@@ -238,8 +286,16 @@ class TransferServer {
       }
     }
     response.headers.contentType = ContentType.html;
-    response.write(_doneHtml(saved));
+    if (refused && saved == 0) {
+      response.statusCode = HttpStatus.forbidden;
+      response.write(_refusedHtml());
+    } else {
+      response.write(_doneHtml(saved));
+    }
   }
+
+  String _refusedHtml() =>
+      '<!doctype html><html lang="fr"><meta charset="utf-8">$_style<body><h1>Envoi refusé</h1><p>Le propriétaire du téléphone n\'a pas accepté ces fichiers.</p><p><a href="/$token/">Réessayer</a></p></body></html>';
 
   /// Browsers send non-ASCII names as raw UTF-8 bytes read as Latin-1.
   String _decodeFileName(String raw) {

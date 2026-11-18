@@ -1,7 +1,11 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
+import 'package:provider/provider.dart';
+
+import '../../core/settings.dart';
 import '../../core/util.dart';
+import 'currency.dart';
 import 'units.dart';
 
 class ConverterPage extends StatefulWidget {
@@ -16,6 +20,82 @@ class _ConverterPageState extends State<ConverterPage> {
   late Unit _from = _category.units[0];
   late Unit _to = _category.units[1];
   final _input = TextEditingController(text: '1');
+
+  // Currencies need rates downloaded from the Internet; they are kept on the
+  // phone so the category keeps working offline.
+  late final CurrencyStore _currencies = CurrencyStore(
+    context.read<AppSettings>(),
+  );
+  CurrencyRates? _rates;
+  UnitCategory? _currencyCategory;
+  bool _loadingRates = false;
+
+  bool get _inCurrencies =>
+      _currencyCategory != null && _category == _currencyCategory;
+
+  @override
+  void initState() {
+    super.initState();
+    final cached = _currencies.cached;
+    if (cached != null) {
+      _rates = cached;
+      _currencyCategory = UnitCategory(
+        'Devises',
+        Icons.euro_rounded,
+        cached.units,
+      );
+    }
+  }
+
+  void _useRates(CurrencyRates rates) {
+    final wasSelected = _inCurrencies;
+    final from = _from.symbol, to = _to.symbol;
+    _rates = rates;
+    _currencyCategory = UnitCategory(
+      'Devises',
+      Icons.euro_rounded,
+      rates.units,
+    );
+    if (wasSelected) {
+      _category = _currencyCategory!;
+      // Keep the pair of currencies chosen, whatever their new position.
+      _from = _category.units.firstWhere(
+        (u) => u.symbol == from,
+        orElse: () => _category.units[0],
+      );
+      _to = _category.units.firstWhere(
+        (u) => u.symbol == to,
+        orElse: () => _category.units[1],
+      );
+    }
+  }
+
+  Future<void> _openCurrencies({bool force = false}) async {
+    setState(() => _loadingRates = true);
+    final rates = await _currencies.refresh(force: force);
+    if (!mounted) return;
+    setState(() {
+      _loadingRates = false;
+      if (rates != null) _useRates(rates);
+    });
+    if (rates == null) {
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Taux indisponibles : vérifiez votre connexion Internet',
+            ),
+          ),
+        );
+    } else if (!_inCurrencies) {
+      _selectCategory(_currencyCategory!);
+    } else if (force) {
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(const SnackBar(content: Text('Taux mis à jour')));
+    }
+  }
 
   double? get _value => double.tryParse(_input.text.replaceAll(',', '.'));
 
@@ -75,9 +155,28 @@ class _ConverterPageState extends State<ConverterPage> {
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: unitCategories.length,
+              itemCount: unitCategories.length + 1,
               separatorBuilder: (_, _) => const SizedBox(width: 8),
               itemBuilder: (_, i) {
+                if (i == unitCategories.length) {
+                  return ChoiceChip(
+                    avatar: _loadingRates
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.euro_rounded, size: 18),
+                    showCheckmark: false,
+                    label: const Text('Devises'),
+                    selected: _inCurrencies,
+                    onSelected: _loadingRates
+                        ? null
+                        : (_) => _currencyCategory == null
+                              ? _openCurrencies()
+                              : _selectCategory(_currencyCategory!),
+                  );
+                }
                 final c = unitCategories[i];
                 return ChoiceChip(
                   avatar: Icon(c.icon, size: 18),
@@ -161,6 +260,29 @@ class _ConverterPageState extends State<ConverterPage> {
               ),
             ),
           ),
+          if (_inCurrencies && _rates != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 8, 0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Taux de la Banque centrale européenne du ${_rates!.date}',
+                      style: text.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Mettre à jour les taux',
+                    icon: const Icon(Icons.refresh_rounded),
+                    onPressed: _loadingRates
+                        ? null
+                        : () => _openCurrencies(force: true),
+                  ),
+                ],
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
             child: Text(
