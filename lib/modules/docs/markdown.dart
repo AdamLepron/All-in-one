@@ -1,3 +1,7 @@
+import 'dart:io';
+
+import 'package:path/path.dart' as p;
+
 /// Minimal Markdown: headings, paragraphs, lists (bulleted, numbered,
 /// checklists), quotes, code blocks, rules, and inline bold, italic,
 /// strike-through, code and links.
@@ -44,6 +48,51 @@ class Rule extends Block {
   const Rule();
 }
 
+/// A picture on its own line: `![description](path)`.
+class ImageBlock extends Block {
+  const ImageBlock(this.alt, this.src);
+  final String alt;
+  final String src;
+}
+
+enum CellAlign { left, center, right }
+
+/// A table: a header row, then rows. Every row has as many cells as the
+/// header.
+class TableBlock extends Block {
+  const TableBlock(this.header, this.rows, this.aligns);
+  final List<String> header;
+  final List<List<String>> rows;
+  final List<CellAlign> aligns;
+}
+
+final _image = RegExp(r'^\s*!\[([^\]\n]*)\]\(([^)\n]+)\)\s*$');
+final _tableSeparator = RegExp(
+  r'^\s*\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)*\|?\s*$',
+);
+
+/// Cells of one table row, without the outer pipes. "\|" is a literal bar.
+List<String> splitRow(String line) {
+  var t = line.trim();
+  if (t.startsWith('|')) t = t.substring(1);
+  if (t.endsWith('|') && !t.endsWith(r'\|')) t = t.substring(0, t.length - 1);
+  final cells = <String>[];
+  final cell = StringBuffer();
+  for (var i = 0; i < t.length; i++) {
+    if (t[i] == r'\' && i + 1 < t.length && t[i + 1] == '|') {
+      cell.write('|');
+      i++;
+    } else if (t[i] == '|') {
+      cells.add(cell.toString().trim());
+      cell.clear();
+    } else {
+      cell.write(t[i]);
+    }
+  }
+  cells.add(cell.toString().trim());
+  return cells;
+}
+
 final _heading = RegExp(r'^(#{1,3})\s+(.*)$');
 final _rule = RegExp(r'^\s*([-*_])(\s*\1){2,}\s*$');
 final _quote = RegExp(r'^>\s?(.*)$');
@@ -68,7 +117,46 @@ List<Block> parseMarkdown(String source) {
     quote = [];
   }
 
-  for (final line in lines) {
+  for (var index = 0; index < lines.length; index++) {
+    final line = lines[index];
+    if (!inCode &&
+        line.contains('|') &&
+        index + 1 < lines.length &&
+        lines[index + 1].contains('-') &&
+        lines[index + 1].contains('|') &&
+        _tableSeparator.hasMatch(lines[index + 1])) {
+      final header = splitRow(line);
+      final marks = splitRow(lines[index + 1]);
+      // The separator must have as many columns as the header.
+      if (marks.length == header.length) {
+        flush();
+        final rows = <List<String>>[];
+        var next = index + 2;
+        while (next < lines.length &&
+            lines[next].trim().isNotEmpty &&
+            lines[next].contains('|')) {
+          final cells = splitRow(lines[next]);
+          // Short rows are completed, long ones cut.
+          rows.add([
+            for (var c = 0; c < header.length; c++)
+              c < cells.length ? cells[c] : '',
+          ]);
+          next++;
+        }
+        blocks.add(
+          TableBlock(header, rows, [
+            for (final m in marks)
+              m.startsWith(':') && m.endsWith(':')
+                  ? CellAlign.center
+                  : m.endsWith(':')
+                  ? CellAlign.right
+                  : CellAlign.left,
+          ]),
+        );
+        index = next - 1;
+        continue;
+      }
+    }
     if (line.trimLeft().startsWith('```')) {
       if (inCode) {
         blocks.add(CodeBlock(code.join('\n')));
@@ -86,6 +174,9 @@ List<Block> parseMarkdown(String source) {
     RegExpMatch? m;
     if (line.trim().isEmpty) {
       flush();
+    } else if ((m = _image.firstMatch(line)) != null) {
+      flush();
+      blocks.add(ImageBlock(m![1]!.trim(), m[2]!.trim()));
     } else if ((m = _heading.firstMatch(line)) != null) {
       flush();
       blocks.add(Heading(m![1]!.length, m[2]!.trim()));
@@ -205,3 +296,27 @@ List<Span> parseInline(String text) {
 /// Words and characters of the text as the author wrote it.
 ({int words, int characters}) textStats(String text) =>
     (words: RegExp(r'\S+').allMatches(text).length, characters: text.length);
+
+/// The file an image block points to: an absolute path, or one relative to
+/// [baseDir] (the document's folder). Web addresses are never fetched, and
+/// null is returned when the file does not exist.
+File? resolveImage(String src, String? baseDir) {
+  final scheme = Uri.tryParse(src)?.scheme ?? '';
+  if (scheme.isNotEmpty &&
+      scheme != 'file' &&
+      !RegExp(r'^[A-Za-z]$').hasMatch(scheme)) {
+    return null;
+  }
+  var path = scheme == 'file' ? Uri.parse(src).toFilePath() : src;
+  try {
+    path = Uri.decodeFull(path);
+  } on Object {
+    // Not percent-encoded after all: used as written.
+  }
+  if (p.isRelative(path)) {
+    if (baseDir == null) return null;
+    path = p.join(baseDir, path);
+  }
+  final file = File(path);
+  return file.existsSync() ? file : null;
+}

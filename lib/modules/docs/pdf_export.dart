@@ -35,7 +35,8 @@ Future<Uint8List> markdownToPdf(
   String source, {
   required String title,
   required PdfFonts fonts,
-}) {
+  String? baseDir,
+}) async {
   final doc = pw.Document(
     title: title,
     creator: 'All-in-One',
@@ -80,6 +81,19 @@ Future<Uint8List> markdownToPdf(
           ),
       ],
     );
+  }
+
+  // Pictures are read up front: building a page cannot wait for the disk.
+  final images = <String, pw.MemoryImage>{};
+  for (final b in parseMarkdown(source)) {
+    if (b is! ImageBlock || images.containsKey(b.src)) continue;
+    final file = resolveImage(b.src, baseDir);
+    if (file == null || file.lengthSync() > 12 * 1024 * 1024) continue;
+    try {
+      images[b.src] = pw.MemoryImage(await file.readAsBytes());
+    } on Object {
+      // Unreadable picture: shown as its description.
+    }
   }
 
   pw.Widget render(Block b) {
@@ -160,6 +174,58 @@ Future<Uint8List> markdownToPdf(
         return pw.Padding(
           padding: const pw.EdgeInsets.symmetric(vertical: 8),
           child: pw.Divider(color: _muted, thickness: 0.8),
+        );
+      case ImageBlock():
+        final image = images[b.src];
+        if (image == null) {
+          return pw.Padding(
+            padding: const pw.EdgeInsets.only(bottom: 7),
+            child: pw.Text(
+              '[${b.alt.isEmpty ? 'image' : b.alt}]',
+              style: const pw.TextStyle(fontSize: 10, color: _muted),
+            ),
+          );
+        }
+        return pw.Padding(
+          padding: const pw.EdgeInsets.only(bottom: 8),
+          child: pw.Center(
+            child: pw.ConstrainedBox(
+              constraints: const pw.BoxConstraints(maxHeight: 420),
+              child: pw.Image(image, fit: pw.BoxFit.contain),
+            ),
+          ),
+        );
+      case TableBlock():
+        pw.Alignment align(int c) => switch (b.aligns[c]) {
+          CellAlign.left => pw.Alignment.centerLeft,
+          CellAlign.center => pw.Alignment.center,
+          CellAlign.right => pw.Alignment.centerRight,
+        };
+        pw.Widget cell(String t, int c, {bool head = false}) => pw.Container(
+          alignment: align(c),
+          padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 4),
+          color: head ? const PdfColor.fromInt(0xFFEDEDF2) : null,
+          child: pw.RichText(text: spans(t, size: 10.5, bold: head)),
+        );
+        return pw.Padding(
+          padding: const pw.EdgeInsets.only(bottom: 9),
+          child: pw.Table(
+            border: pw.TableBorder.all(color: _muted, width: 0.6),
+            children: [
+              pw.TableRow(
+                children: [
+                  for (var c = 0; c < b.header.length; c++)
+                    cell(b.header[c], c, head: true),
+                ],
+              ),
+              for (final row in b.rows)
+                pw.TableRow(
+                  children: [
+                    for (var c = 0; c < row.length; c++) cell(row[c], c),
+                  ],
+                ),
+            ],
+          ),
         );
     }
   }

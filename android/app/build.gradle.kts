@@ -68,4 +68,6 @@ dependencies {
     implementation("androidx.media3:media3-transformer:1.11.1")
     implementation("androidx.media3:media3-effect:1.11.1")
     implementation("androidx.media3:media3-common:1.11.1")
+    // Table of contents and text search in PDF files.
+    implementation("com.tom-roush:pdfbox-android:2.0.27.0")
 }

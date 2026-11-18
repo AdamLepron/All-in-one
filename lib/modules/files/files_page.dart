@@ -5,7 +5,9 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../../core/platform.dart';
 import '../../core/util.dart';
+import 'categories.dart';
 import 'file_ops.dart';
+import 'file_search_pages.dart';
 import 'files_ui.dart';
 import 'folder_page.dart';
 
@@ -30,6 +32,8 @@ class _FilesPageState extends State<FilesPage> with WidgetsBindingObserver {
   bool? _granted;
   ({int total, int free})? _storage;
   int _trashCount = 0;
+  List<Volume> _volumes = const [];
+  final _volumeStats = <String, ({int total, int free})>{};
   final _trash = Trash.device();
 
   @override
@@ -83,19 +87,30 @@ class _FilesPageState extends State<FilesPage> with WidgetsBindingObserver {
 
   Future<void> _refresh() async {
     final storage = await MediaChannel.storage();
+    final volumes = await removableVolumes();
+    for (final v in volumes) {
+      final stats = await MediaChannel.storage(v.path);
+      if (stats != null) _volumeStats[v.path] = stats;
+    }
     await _trash.purgeExpired();
     final count = (await _trash.items()).length;
     if (mounted) {
       setState(() {
         _storage = storage;
+        _volumes = volumes;
         _trashCount = count;
       });
     }
   }
 
-  Future<void> _browse(String path) async {
-    await Navigator.of(context)
-        .push(MaterialPageRoute(builder: (_) => FolderPage(path: path)));
+  List<String> get _roots => [storageRoot, for (final v in _volumes) v.path];
+
+  Future<void> _browse(String path, {String? root}) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => FolderPage(path: path, root: root ?? storageRoot),
+      ),
+    );
     if (mounted) _refresh();
   }
 
@@ -118,6 +133,20 @@ class _FilesPageState extends State<FilesPage> with WidgetsBindingObserver {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: SearchBar(
+            hintText: 'Rechercher dans tous les fichiers',
+            leading: const Icon(Icons.search),
+            elevation: const WidgetStatePropertyAll(0),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => FileSearchPage(roots: _roots),
+              ),
+            ),
+            readOnly: true,
+          ),
+        ),
         Card(
           clipBehavior: Clip.antiAlias,
           child: InkWell(
@@ -163,6 +192,46 @@ class _FilesPageState extends State<FilesPage> with WidgetsBindingObserver {
               ),
             ),
           ),
+        ),
+        for (final v in _volumes)
+          Card(
+            clipBehavior: Clip.antiAlias,
+            child: ListTile(
+              leading: Icon(Icons.sd_card_outlined, color: scheme.primary),
+              title: Text(v.label),
+              subtitle: _volumeStats[v.path] == null
+                  ? null
+                  : Text(
+                      '${formatBytes(_volumeStats[v.path]!.free)} libres sur ${formatBytes(_volumeStats[v.path]!.total)}',
+                    ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => _browse(v.path, root: v.path),
+            ),
+          ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 24, 4, 10),
+          child: Text(
+            'Catégories',
+            style: text.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+          ),
+        ),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final c in FileCategory.values)
+              ActionChip(
+                avatar: c == FileCategory.recent
+                    ? const Icon(Icons.schedule, size: 18)
+                    : KindIcon(c.kind, size: 18),
+                label: Text(c.label),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => CategoryPage(category: c, roots: _roots),
+                  ),
+                ),
+              ),
+          ],
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(4, 24, 4, 10),

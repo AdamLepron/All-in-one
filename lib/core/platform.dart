@@ -16,12 +16,17 @@ class MediaChannel {
       });
 
   /// Total and free bytes of internal storage, or null when unavailable.
-  static Future<({int total, int free})?> storage() async {
+  static Future<({int total, int free})?> storage([String? path]) async {
     try {
-      final map = await _channel.invokeMapMethod<String, int>('storage');
+      final map = await _channel.invokeMapMethod<String, int>(
+        'storage',
+        path == null ? null : {'path': path},
+      );
       if (map == null) return null;
       return (total: map['total']!, free: map['free']!);
     } on MissingPluginException {
+      return null;
+    } on PlatformException {
       return null;
     }
   }
@@ -71,6 +76,57 @@ class MediaChannel {
         'page': page,
         'width': width,
       });
+
+  /// Table of contents of a PDF: title, 0-based page (-1 if unknown), level.
+  static Future<List<({String title, int page, int level})>> pdfOutline(
+    String path,
+  ) async {
+    try {
+      final rows = await _channel.invokeListMethod<Map<Object?, Object?>>(
+        'pdfOutline',
+        {'path': path},
+      );
+      return [
+        for (final r in rows ?? const <Map<Object?, Object?>>[])
+          (
+            title: (r['title'] as String?) ?? '',
+            page: (r['page'] as num?)?.toInt() ?? -1,
+            level: (r['level'] as num?)?.toInt() ?? 0,
+          ),
+      ];
+    } on MissingPluginException {
+      return const [];
+    } on PlatformException {
+      return const [];
+    }
+  }
+
+  /// Occurrences of [query] in a PDF; each has its page, a snippet and boxes
+  /// [left, top, right, bottom] as fractions of the page. Null when the
+  /// search could not run.
+  static Future<List<PdfHit>?> pdfSearch(
+    String path,
+    String query, {
+    bool caseSensitive = false,
+  }) async {
+    try {
+      final rows = await _channel.invokeListMethod<Map<Object?, Object?>>(
+        'pdfSearch',
+        {'path': path, 'query': query, 'caseSensitive': caseSensitive},
+      );
+      return [
+        for (final r in rows ?? const <Map<Object?, Object?>>[])
+          PdfHit((r['page'] as num).toInt(), (r['snippet'] as String?) ?? '', [
+            for (final box in (r['rects'] as List))
+              [for (final v in (box as List)) (v as num).toDouble()],
+          ]),
+      ];
+    } on MissingPluginException {
+      return null;
+    } on PlatformException {
+      return null;
+    }
+  }
 
   static Future<void> pdfClose(int id) => _quiet('pdfClose', {'id': id});
 
@@ -279,4 +335,14 @@ class MediaChannel {
       // Not on a device (tests).
     }
   }
+}
+
+/// One occurrence of a searched word in a PDF.
+class PdfHit {
+  const PdfHit(this.page, this.snippet, this.rects);
+  final int page;
+  final String snippet;
+
+  /// Boxes [left, top, right, bottom] as fractions of the page's size.
+  final List<List<double>> rects;
 }

@@ -11,6 +11,7 @@ import '../../core/settings.dart';
 import '../../core/util.dart';
 import '../music/music_controller.dart';
 import '../reader/documents.dart';
+import 'archives.dart';
 import 'file_ops.dart';
 import 'files_ui.dart';
 
@@ -111,6 +112,10 @@ class _FolderPageState extends State<FolderPage> {
       showMessage(context, 'Lecture de ${e.name}');
       return;
     }
+    if (canExtract(e.path)) {
+      _archiveActions(e);
+      return;
+    }
     if (docTypeOf(e.path) != DocType.other) {
       await openDocument(context, e.path);
       return;
@@ -124,6 +129,78 @@ class _FolderPageState extends State<FolderPage> {
             : "Impossible d'ouvrir ce fichier",
       );
     }
+  }
+
+  /// Compresses the selection into a zip next to the files.
+  Future<void> _compress() async {
+    final paths = _selected.toList();
+    setState(_selected.clear);
+    await _run(() async {
+      final zip = await zipEntities(paths, widget.path);
+      if (mounted) showMessage(context, 'Créé : ${p.basename(zip)}');
+    });
+  }
+
+  Future<void> _extract(Entry e, {required bool inFolder}) async {
+    final dest = inFolder
+        ? await uniquePath(widget.path, archiveStem(e.path))
+        : widget.path;
+    setState(() => _busy = true);
+    try {
+      final r = await extractArchive(e.path, dest);
+      if (mounted) {
+        showMessage(
+          context,
+          '${r.files} fichier${r.files > 1 ? 's' : ''} extrait${r.files > 1 ? 's' : ''}'
+          '${r.skipped > 0 ? ' · ${r.skipped} entrée(s) ignorée(s) par sécurité' : ''}',
+        );
+      }
+    } on Object {
+      if (mounted) showMessage(context, "Impossible d'extraire cette archive");
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+        await _load();
+      }
+    }
+  }
+
+  void _archiveActions(Entry e) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (sheet) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(leading: KindIcon(e.kind), title: Text(e.name)),
+            ListTile(
+              leading: const Icon(Icons.folder_zip_outlined),
+              title: const Text('Extraire dans un nouveau dossier'),
+              onTap: () {
+                Navigator.pop(sheet);
+                _extract(e, inFolder: true);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.unarchive_outlined),
+              title: const Text('Extraire ici'),
+              onTap: () {
+                Navigator.pop(sheet);
+                _extract(e, inFolder: false);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.open_in_new),
+              title: const Text('Ouvrir avec une autre application'),
+              onTap: () {
+                Navigator.pop(sheet);
+                OpenFilex.open(e.path);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _newFolder() async {
@@ -307,8 +384,8 @@ class _FolderPageState extends State<FolderPage> {
     final clipboard = context.watch<FilesClipboard>();
     final selecting = _selected.isNotEmpty;
     final visible = _visible;
-    final title = widget.path == widget.root && widget.root == storageRoot
-        ? 'Stockage interne'
+    final title = widget.path == widget.root
+        ? (widget.root == storageRoot ? 'Stockage interne' : 'Carte SD')
         : p.basename(widget.path);
 
     return PopScope(
@@ -351,6 +428,10 @@ class _FolderPageState extends State<FolderPage> {
                       PopupMenuItem(
                         value: _share,
                         child: const Text('Partager'),
+                      ),
+                      PopupMenuItem(
+                        value: _compress,
+                        child: const Text('Compresser en .zip'),
                       ),
                       if (_selected.length == 1) ...[
                         PopupMenuItem(

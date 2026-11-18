@@ -306,3 +306,60 @@ class TextHistory {
 
   void dispose() => controller.removeListener(_onChanged);
 }
+
+/// Inserts an empty table of [columns] × [rows] (plus the header) at the
+/// caret, on its own lines.
+TextEditingValue insertTable(
+  TextEditingValue v, {
+  int columns = 2,
+  int rows = 2,
+}) {
+  final cols = columns.clamp(1, 8);
+  final body = rows.clamp(1, 30);
+  String line(String Function(int) cell) =>
+      '| ${[for (var c = 0; c < cols; c++) cell(c)].join(' | ')} |';
+  final table = [
+    line((c) => 'Colonne ${c + 1}'),
+    line((_) => '---'),
+    for (var r = 0; r < body; r++) line((_) => '   '),
+  ].join('\n');
+  final sel = v.selection.isValid
+      ? v.selection
+      : TextSelection.collapsed(offset: v.text.length);
+  final before = v.text.substring(0, sel.start);
+  final after = v.text.substring(sel.end);
+  // A blank line before and after keeps the table apart from other text.
+  final lead = before.isEmpty || before.endsWith('\n\n')
+      ? ''
+      : before.endsWith('\n')
+      ? '\n'
+      : '\n\n';
+  final tail = after.startsWith('\n\n') || after.isEmpty ? '\n' : '\n\n';
+  final text = '$before$lead$table$tail$after';
+  return TextEditingValue(
+    text: text,
+    // The caret goes to the first header cell, selecting its placeholder.
+    selection: TextSelection(
+      baseOffset: before.length + lead.length + 2,
+      extentOffset: before.length + lead.length + 2 + 'Colonne 1'.length,
+    ),
+  );
+}
+
+/// Inserts `![alt](src)` on its own line at the caret.
+TextEditingValue insertImage(TextEditingValue v, String alt, String src) {
+  final sel = v.selection.isValid
+      ? v.selection
+      : TextSelection.collapsed(offset: v.text.length);
+  final before = v.text.substring(0, sel.start);
+  final after = v.text.substring(sel.end);
+  final safeAlt = alt.replaceAll(RegExp(r'[\[\]\n]'), ' ').trim();
+  final safeSrc = src.replaceAll(' ', '%20').replaceAll(')', '%29');
+  final lead = before.isEmpty || before.endsWith('\n') ? '' : '\n';
+  final tail = after.isEmpty || after.startsWith('\n') ? '' : '\n';
+  final insert = '$lead![$safeAlt]($safeSrc)$tail';
+  return TextEditingValue(
+    text: '$before$insert$after',
+    selection: TextSelection.collapsed(offset: before.length + insert.length),
+  );
+}

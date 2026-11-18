@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter/services.dart';
 import 'package:google_mlkit_document_scanner/google_mlkit_document_scanner.dart';
@@ -10,10 +11,51 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../core/platform.dart';
 import '../../core/util.dart';
+import '../docs/pdf_export.dart' show PdfFonts;
 import '../files/file_ops.dart';
 import '../files/files_ui.dart';
 import '../reader/pdf_view_page.dart';
+import 'scan_pdf.dart';
 import 'scan_store.dart';
+
+/// Reads the text of each picture, with its position. Null when text
+/// recognition is not available on this phone.
+Future<List<PageOcr>?> readPagesOcr(List<String> paths) async {
+  final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
+  try {
+    final pages = <PageOcr>[];
+    for (final path in paths) {
+      final result = await recognizer.processImage(
+        InputImage.fromFilePath(path),
+      );
+      final codec = await ui.instantiateImageCodec(
+        await File(path).readAsBytes(),
+      );
+      final frame = await codec.getNextFrame();
+      final width = frame.image.width, height = frame.image.height;
+      frame.image.dispose();
+      codec.dispose();
+      pages.add(
+        PageOcr(width, height, [
+          for (final block in result.blocks)
+            for (final line in block.lines)
+              OcrLine(
+                line.text,
+                line.boundingBox.left,
+                line.boundingBox.top,
+                line.boundingBox.right,
+                line.boundingBox.bottom,
+              ),
+        ]),
+      );
+    }
+    return pages;
+  } on PlatformException {
+    return null;
+  } finally {
+    await recognizer.close();
+  }
+}
 
 /// Library of scanned documents; the button starts a new scan.
 class ScannerPage extends StatefulWidget {
@@ -51,25 +93,18 @@ class _ScannerPageState extends State<ScannerPage> {
       if (images.isEmpty) return;
       if (mounted) setState(() => _busy = true);
 
-      final text = StringBuffer();
-      final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
-      try {
-        for (final image in images) {
-          final page = await recognizer.processImage(
-            InputImage.fromFilePath(localPath(image)),
-          );
-          if (page.text.trim().isNotEmpty) text.writeln(page.text.trim());
-        }
-      } on PlatformException {
-        // Text recognition unavailable: keep the scan without its text.
-      } finally {
-        await recognizer.close();
-      }
-
+      final ocr = await readPagesOcr([for (final i in images) localPath(i)]);
       final scan = await store.add(
         images: images,
         pdf: result.pdf?.uri,
-        text: text.toString().trim(),
+        text: ocr == null
+            ? ''
+            : ocr
+                  .map((o) => o.text.trim())
+                  .where((t) => t.isNotEmpty)
+                  .join('\n'),
+        ocr: ocr,
+        fonts: await PdfFonts.load(),
       );
       if (mounted) _open(scan);
     } on PlatformException catch (e) {
@@ -209,6 +244,45 @@ class _ScanDetailPageState extends State<ScanDetailPage> {
   Scan get scan => widget.scan;
   bool get _hasPdf => File(scan.pdf).existsSync();
 
+  bool _needsOcr = false;
+
+  @override
+  void initState() {
+    super.initState();
+    context.read<ScanStore>().ocrOf(scan).then((o) {
+      if (mounted) setState(() => _needsOcr = o == null);
+    });
+  }
+
+  Future<void> _managePages() async {
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(builder: (_) => ScanPagesPage(scan: scan)),
+    );
+    if (changed == true && mounted) {
+      if (_page >= scan.pages) _page = scan.pages - 1;
+      PaintingBinding.instance.imageCache.clear();
+      setState(() {});
+    }
+  }
+
+  /// Reads the pages of an older scan so its PDF can be searched.
+  Future<void> _makeSearchable() async {
+    final store = context.read<ScanStore>();
+    showMessage(context, 'Lecture du texte des pages…');
+    final ocr = await readPagesOcr([
+      for (var i = 0; i < scan.pages; i++) scan.page(i),
+    ]);
+    if (ocr == null) {
+      if (mounted) showMessage(context, 'Reconnaissance du texte indisponible');
+      return;
+    }
+    await store.storeOcr(scan, ocr, await PdfFonts.load());
+    if (mounted) {
+      setState(() => _needsOcr = false);
+      showMessage(context, 'Le PDF est maintenant cherchable');
+    }
+  }
+
   Future<void> _rename() async {
     final store = context.read<ScanStore>();
     final name = await askName(
@@ -332,6 +406,15 @@ class _ScanDetailPageState extends State<ScanDetailPage> {
             onSelected: (action) => action(),
             itemBuilder: (_) => [
               PopupMenuItem(value: _rename, child: const Text('Renommer')),
+              PopupMenuItem(
+                value: _managePages,
+                child: const Text('Réorganiser les pages'),
+              ),
+              if (_needsOcr)
+                PopupMenuItem(
+                  value: _makeSearchable,
+                  child: const Text('Rendre le PDF cherchable'),
+                ),
               if (_hasPdf) ...[
                 PopupMenuItem(
                   value: () => Navigator.of(context).push(
@@ -406,6 +489,147 @@ class _ScanDetailPageState extends State<ScanDetailPage> {
                   ],
                 ),
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Reorder, turn and delete the pages of a scan.
+class ScanPagesPage extends StatefulWidget {
+  const ScanPagesPage({super.key, required this.scan});
+  final Scan scan;
+
+  @override
+  State<ScanPagesPage> createState() => _ScanPagesPageState();
+}
+
+class _PageEntry {
+  _PageEntry(this.index);
+  final int index;
+  int turns = 0;
+}
+
+class _ScanPagesPageState extends State<ScanPagesPage> {
+  late final List<_PageEntry> _entries = [
+    for (var i = 0; i < widget.scan.pages; i++) _PageEntry(i),
+  ];
+  bool _busy = false;
+
+  bool get _changed =>
+      _entries.length != widget.scan.pages ||
+      [for (final e in _entries) e.index]
+          .asMap()
+          .entries
+          .any((m) => m.key != m.value) ||
+      _entries.any((e) => e.turns % 4 != 0);
+
+  Future<void> _apply() async {
+    final store = context.read<ScanStore>();
+    final navigator = Navigator.of(context);
+    setState(() => _busy = true);
+    try {
+      final fonts = await PdfFonts.load();
+      // Pictures are turned first, under their current numbers.
+      for (final e in _entries) {
+        if (e.turns % 4 != 0) {
+          await store.rotatePage(widget.scan, e.index, e.turns, fonts: fonts);
+        }
+      }
+      await store.arrangePages(widget.scan, [
+        for (final e in _entries) e.index,
+      ], fonts: fonts);
+      navigator.pop(true);
+    } on Object {
+      if (mounted) {
+        setState(() => _busy = false);
+        showMessage(context, 'Impossible de modifier les pages');
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Pages'),
+        actions: [
+          TextButton(
+            onPressed: _changed && !_busy ? _apply : null,
+            child: const Text('Appliquer'),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          if (_busy) const LinearProgressIndicator(minHeight: 2),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+            child: Text(
+              'Faites glisser une page par sa poignée pour la déplacer.',
+              style: TextStyle(color: scheme.onSurfaceVariant),
+            ),
+          ),
+          Expanded(
+            child: ReorderableListView.builder(
+              buildDefaultDragHandles: false,
+              itemCount: _entries.length,
+              onReorderItem: (from, to) =>
+                  setState(() => _entries.insert(to, _entries.removeAt(from))),
+              itemBuilder: (_, position) {
+                final e = _entries[position];
+                return ListTile(
+                  key: ValueKey(e.index),
+                  leading: SizedBox(
+                    width: 56,
+                    height: 72,
+                    child: RotatedBox(
+                      quarterTurns: e.turns,
+                      child: Image.file(
+                        File(widget.scan.page(e.index)),
+                        cacheWidth: 160,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, _, _) =>
+                            const Icon(Icons.broken_image_outlined),
+                      ),
+                    ),
+                  ),
+                  title: Text('Page ${position + 1}'),
+                  subtitle: e.index != position
+                      ? Text('Était la page ${e.index + 1}')
+                      : null,
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: 'Tourner la page ${position + 1}',
+                        icon: const Icon(Icons.rotate_right),
+                        onPressed: _busy
+                            ? null
+                            : () => setState(() => e.turns = (e.turns + 1) % 4),
+                      ),
+                      IconButton(
+                        tooltip: 'Supprimer la page ${position + 1}',
+                        icon: const Icon(Icons.delete_outline),
+                        onPressed: _busy || _entries.length == 1
+                            ? null
+                            : () => setState(() => _entries.removeAt(position)),
+                      ),
+                      ReorderableDragStartListener(
+                        index: position,
+                        child: const SizedBox(
+                          width: 48,
+                          height: 48,
+                          child: Icon(Icons.drag_handle),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
           ),
         ],

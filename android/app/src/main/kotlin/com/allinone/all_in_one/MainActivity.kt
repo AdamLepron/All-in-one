@@ -32,6 +32,7 @@ class MainActivity : AudioServiceActivity() {
     private val executor = Executors.newFixedThreadPool(4)
     private val main = Handler(Looper.getMainLooper())
     private val pdf = PdfDocuments()
+    private val pdfText by lazy { PdfText(this) }
     private val effects = AudioEffects()
     private val video by lazy { VideoExporter(this) }
     private val intake by lazy { ShareIntake(this, executor, main) }
@@ -68,7 +69,7 @@ class MainActivity : AudioServiceActivity() {
                                 (call.argument<Number>("albumId"))!!.toLong(),
                                 call.argument<Int>("size") ?: 512,
                             )
-                            "storage" -> storage()
+                            "storage" -> storage(call.argument<String>("path"))
                             "media" -> queryMedia()
                             "calendarEvents" -> calendarEvents(
                                 (call.argument<Number>("start"))!!.toLong(),
@@ -89,6 +90,12 @@ class MainActivity : AudioServiceActivity() {
                                 call.argument<Int>("id")!!,
                                 call.argument<Int>("page")!!,
                                 call.argument<Int>("width")!!,
+                            )
+                            "pdfOutline" -> pdfText.outline(call.argument<String>("path")!!)
+                            "pdfSearch" -> pdfText.search(
+                                call.argument<String>("path")!!,
+                                call.argument<String>("query") ?: "",
+                                call.argument<Boolean>("caseSensitive") ?: false,
                             )
                             "pdfClose" -> {
                                 pdf.close(call.argument<Int>("id")!!)
@@ -527,8 +534,8 @@ class MainActivity : AudioServiceActivity() {
         }
     }
 
-    private fun storage(): Map<String, Long> {
-        val stat = StatFs(Environment.getExternalStorageDirectory().path)
+    private fun storage(path: String?): Map<String, Long> {
+        val stat = StatFs(path ?: Environment.getExternalStorageDirectory().path)
         return mapOf("total" to stat.totalBytes, "free" to stat.availableBytes)
     }
 

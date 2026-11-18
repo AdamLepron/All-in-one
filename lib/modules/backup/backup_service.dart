@@ -50,7 +50,8 @@ class BackupService {
     required this.scansDir,
     required this.recordingsDir,
     this.noteFilesDir,
-    this.appVersion = '1.3.1',
+    this.annotationsDir,
+    this.appVersion = '1.4.0',
   });
 
   final NotesStore notes;
@@ -61,6 +62,9 @@ class BackupService {
 
   /// Attachments of notes; null leaves them out of backups.
   final String? noteFilesDir;
+
+  /// PDF annotations; null leaves them out of backups.
+  final String? annotationsDir;
   final String appVersion;
 
   /// Writes a backup into [outputDir] and returns its path.
@@ -97,6 +101,9 @@ class BackupService {
         await _addFolder(zip, recordingsDir, 'recordings');
         if (noteFilesDir != null) {
           await _addFolder(zip, noteFilesDir!, 'note_files');
+        }
+        if (annotationsDir != null) {
+          await _addFolder(zip, annotationsDir!, 'pdf_annotations');
         }
       }
     } finally {
@@ -206,6 +213,12 @@ class BackupService {
         await _replaceFolder(p.join(work.path, 'recordings'), recordingsDir);
         if (noteFilesDir != null) {
           await _replaceFolder(p.join(work.path, 'note_files'), noteFilesDir!);
+        }
+        if (annotationsDir != null) {
+          await _replaceFolder(
+            p.join(work.path, 'pdf_annotations'),
+            annotationsDir!,
+          );
         }
       }
       return info;

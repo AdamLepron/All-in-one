@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as p;
@@ -10,6 +11,7 @@ import '../../core/platform.dart';
 import '../files/file_ops.dart';
 import '../files/files_ui.dart';
 import 'docs_store.dart';
+import 'find_replace.dart';
 import 'markdown.dart';
 import 'markdown_edit.dart';
 import 'markdown_view.dart';
@@ -51,6 +53,15 @@ class _DocumentEditorPageState extends State<DocumentEditorPage> {
   bool _preview = false;
   bool _exporting = false;
 
+  // Search and replace.
+  bool _finding = false;
+  final _findText = TextEditingController();
+  final _replaceText = TextEditingController();
+  bool _caseSensitive = false;
+  bool _wholeWord = false;
+  List<TextMatch> _matches = const [];
+  int _current = -1;
+
   /// Bumped on each keystroke batch so word counts do not rebuild per key.
   ({int words, int characters}) _stats = (words: 0, characters: 0);
 
@@ -90,6 +101,7 @@ class _DocumentEditorPageState extends State<DocumentEditorPage> {
   void _onChanged() {
     if (!_loaded || _text.text == _lastText) return;
     _lastText = _text.text;
+    if (_finding) _search(keepPosition: true);
     _dirty = true;
     _saveTimer?.cancel();
     _saveTimer = Timer(const Duration(milliseconds: 1200), () {
@@ -129,6 +141,8 @@ class _DocumentEditorPageState extends State<DocumentEditorPage> {
     final path = _path;
     if (path != null) MediaChannel.scan([path]);
     _saveTimer?.cancel();
+    _findText.dispose();
+    _replaceText.dispose();
     _text.dispose();
     _history.dispose();
     _focus.dispose();
@@ -143,6 +157,167 @@ class _DocumentEditorPageState extends State<DocumentEditorPage> {
     _text.value = edit(_text.value);
     _history.checkpoint();
     _focus.requestFocus();
+  }
+
+  /// Looks for the query again; selects the match at or after the caret.
+  void _search({bool keepPosition = false}) {
+    final found = findAll(
+      _text.text,
+      _findText.text,
+      caseSensitive: _caseSensitive,
+      wholeWord: _wholeWord,
+    );
+    final caret = _text.selection.isValid ? _text.selection.start : 0;
+    setState(() {
+      _matches = found;
+      _current = found.isEmpty
+          ? -1
+          : keepPosition && _current >= 0 && _current < found.length
+          ? _current
+          : nextMatchIndex(found, caret);
+    });
+  }
+
+  void _go({bool backwards = false}) {
+    if (_matches.isEmpty) return;
+    final caret = _text.selection.isValid
+        ? (backwards ? _text.selection.start : _text.selection.end)
+        : 0;
+    final i = nextMatchIndex(_matches, caret, backwards: backwards);
+    final m = _matches[i];
+    setState(() => _current = i);
+    // Focus makes the field show and scroll to the selection.
+    _focus.requestFocus();
+    _text.selection = TextSelection(baseOffset: m.start, extentOffset: m.end);
+  }
+
+  void _replaceCurrent() {
+    if (_current < 0 || _current >= _matches.length) return;
+    final m = _matches[_current];
+    _history.checkpoint();
+    final text = replaceMatch(_text.text, m, _replaceText.text);
+    _text.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(
+        offset: m.start + _replaceText.text.length,
+      ),
+    );
+    _history.checkpoint();
+    _search();
+    _go();
+  }
+
+  void _replaceAll() {
+    final r = replaceEvery(
+      _text.text,
+      _findText.text,
+      _replaceText.text,
+      caseSensitive: _caseSensitive,
+      wholeWord: _wholeWord,
+    );
+    if (r.count == 0) return;
+    _history.checkpoint();
+    _text.value = TextEditingValue(
+      text: r.text,
+      selection: const TextSelection.collapsed(offset: 0),
+    );
+    _history.checkpoint();
+    _search();
+    showMessage(
+      context,
+      '${r.count} remplacement${r.count > 1 ? 's' : ''}',
+      action: SnackBarAction(
+        label: 'Annuler',
+        onPressed: () => setState(_history.undo),
+      ),
+    );
+  }
+
+  Future<void> _addImage() async {
+    final PlatformFile? picked;
+    try {
+      picked = await FilePicker.pickFile();
+    } on Object {
+      return;
+    }
+    final source = picked?.path;
+    if (source == null || !mounted) return;
+    try {
+      final dir = _path == null ? widget.directory : p.dirname(_path!);
+      final images = Directory(p.join(dir, 'images'));
+      await images.create(recursive: true);
+      final target = await uniquePath(images.path, p.basename(source));
+      await File(source).copy(target);
+      _apply(
+        (v) => insertImage(
+          v,
+          p.basenameWithoutExtension(source),
+          'images/${p.basename(target)}',
+        ),
+      );
+    } on FileSystemException {
+      if (mounted) showMessage(context, "Impossible d'ajouter l'image");
+    }
+  }
+
+  Future<void> _addTable() async {
+    var columns = 3, rows = 2;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => StatefulBuilder(
+        builder: (context, setLocal) {
+          Widget stepper(
+            String label,
+            int value,
+            int min,
+            int max,
+            void Function(int) set,
+          ) => Row(
+            children: [
+              Expanded(child: Text(label)),
+              IconButton(
+                tooltip: 'Moins de $label',
+                icon: const Icon(Icons.remove),
+                onPressed: value > min
+                    ? () => setLocal(() => set(value - 1))
+                    : null,
+              ),
+              SizedBox(width: 28, child: Center(child: Text('$value'))),
+              IconButton(
+                tooltip: 'Plus de $label',
+                icon: const Icon(Icons.add),
+                onPressed: value < max
+                    ? () => setLocal(() => set(value + 1))
+                    : null,
+              ),
+            ],
+          );
+          return AlertDialog(
+            title: const Text('Insérer un tableau'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                stepper('colonnes', columns, 1, 6, (v) => columns = v),
+                stepper('lignes', rows, 1, 12, (v) => rows = v),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialog, false),
+                child: const Text('Annuler'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialog, true),
+                child: const Text('Insérer'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    if (ok == true) {
+      _apply((v) => insertTable(v, columns: columns, rows: rows));
+    }
   }
 
   Future<void> _link() async {
@@ -204,7 +379,12 @@ class _DocumentEditorPageState extends State<DocumentEditorPage> {
     setState(() => _exporting = true);
     try {
       final fonts = widget.fonts ?? await PdfFonts.load();
-      final bytes = await markdownToPdf(_text.text, title: _name, fonts: fonts);
+      final bytes = await markdownToPdf(
+        _text.text,
+        title: _name,
+        fonts: fonts,
+        baseDir: _path == null ? widget.directory : p.dirname(_path!),
+      );
       final dir = _path == null ? widget.directory : p.dirname(_path!);
       await Directory(dir).create(recursive: true);
       final target = await uniquePath(dir, '$_name.pdf');
@@ -246,6 +426,100 @@ class _DocumentEditorPageState extends State<DocumentEditorPage> {
     navigator.pop();
   }
 
+  Widget _findBar(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.surfaceContainer,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _findText,
+                    autofocus: true,
+                    onChanged: (_) => _search(),
+                    onSubmitted: (_) => _go(),
+                    decoration: InputDecoration(
+                      hintText: 'Rechercher',
+                      isDense: true,
+                      filled: false,
+                      border: InputBorder.none,
+                      suffixText: _findText.text.isEmpty
+                          ? null
+                          : _matches.isEmpty
+                          ? '0'
+                          : '${_current + 1}/${_matches.length}',
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Résultat précédent',
+                  icon: const Icon(Icons.keyboard_arrow_up),
+                  onPressed: _matches.isEmpty
+                      ? null
+                      : () => _go(backwards: true),
+                ),
+                IconButton(
+                  tooltip: 'Résultat suivant',
+                  icon: const Icon(Icons.keyboard_arrow_down),
+                  onPressed: _matches.isEmpty ? null : _go,
+                ),
+              ],
+            ),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _replaceText,
+                    decoration: const InputDecoration(
+                      hintText: 'Remplacer par',
+                      isDense: true,
+                      filled: false,
+                      border: InputBorder.none,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: _current < 0 ? null : _replaceCurrent,
+                  child: const Text('Remplacer'),
+                ),
+                TextButton(
+                  onPressed: _matches.isEmpty ? null : _replaceAll,
+                  child: const Text('Tout'),
+                ),
+              ],
+            ),
+            Row(
+              children: [
+                FilterChip(
+                  label: const Text('Aa'),
+                  tooltip: 'Respecter la casse',
+                  selected: _caseSensitive,
+                  onSelected: (v) {
+                    _caseSensitive = v;
+                    _search();
+                  },
+                ),
+                const SizedBox(width: 8),
+                FilterChip(
+                  label: const Text('Mot entier'),
+                  selected: _wholeWord,
+                  onSelected: (v) {
+                    _wholeWord = v;
+                    _search();
+                  },
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -275,6 +549,20 @@ class _DocumentEditorPageState extends State<DocumentEditorPage> {
               if (!_preview) _focus.requestFocus();
             },
           ),
+          if (!_preview)
+            IconButton(
+              tooltip: 'Rechercher et remplacer',
+              icon: Icon(_finding ? Icons.search_off : Icons.search),
+              onPressed: () {
+                setState(() => _finding = !_finding);
+                if (_finding) {
+                  _search();
+                } else {
+                  _matches = const [];
+                  _current = -1;
+                }
+              },
+            ),
           IconButton(
             tooltip: 'Exporter en PDF',
             icon: const Icon(Icons.picture_as_pdf_outlined),
@@ -315,9 +603,15 @@ class _DocumentEditorPageState extends State<DocumentEditorPage> {
           : Column(
               children: [
                 if (_exporting) const LinearProgressIndicator(minHeight: 2),
+                if (_finding && !_preview) _findBar(context),
                 Expanded(
                   child: _preview
-                      ? MarkdownView(_text.text)
+                      ? MarkdownView(
+                          _text.text,
+                          baseDir: _path == null
+                              ? widget.directory
+                              : p.dirname(_path!),
+                        )
                       : TextField(
                           controller: _text,
                           focusNode: _focus,
@@ -410,6 +704,16 @@ class _DocumentEditorPageState extends State<DocumentEditorPage> {
                                   () => _apply((v) => toggleWrap(v, '`')),
                                 ),
                                 _Tool(Icons.link_rounded, 'Lien', _link),
+                                _Tool(
+                                  Icons.image_outlined,
+                                  'Insérer une image',
+                                  _addImage,
+                                ),
+                                _Tool(
+                                  Icons.table_chart_outlined,
+                                  'Insérer un tableau',
+                                  _addTable,
+                                ),
                                 _Tool(
                                   Icons.horizontal_rule_rounded,
                                   'Séparateur',

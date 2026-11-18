@@ -22,8 +22,12 @@ class MarkdownView extends StatefulWidget {
     this.source, {
     super.key,
     this.padding = const EdgeInsets.all(20),
+    this.baseDir,
   });
   final String source;
+
+  /// Folder of the document, to find pictures it refers to.
+  final String? baseDir;
   final EdgeInsets padding;
 
   @override
@@ -66,6 +70,91 @@ class _MarkdownViewState extends State<MarkdownView> {
             ),
           ),
       ],
+    );
+  }
+
+  Widget _picture(ImageBlock b, ColorScheme scheme) {
+    final file = resolveImage(b.src, widget.baseDir);
+    final missing = Container(
+      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.broken_image_outlined, color: scheme.outline),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              b.alt.isEmpty ? 'Image introuvable' : '${b.alt} (introuvable)',
+              style: TextStyle(color: scheme.onSurfaceVariant),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (file == null) return missing;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Semantics(
+        image: true,
+        label: b.alt.isEmpty ? 'Image' : b.alt,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: Image.file(
+            file,
+            fit: BoxFit.contain,
+            errorBuilder: (_, _, _) => missing,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _table(
+    TableBlock b,
+    TextStyle body,
+    ColorScheme scheme,
+    TextSpan Function(String, TextStyle) rich,
+  ) {
+    TextAlign align(int c) => switch (b.aligns[c]) {
+      CellAlign.left => TextAlign.left,
+      CellAlign.center => TextAlign.center,
+      CellAlign.right => TextAlign.right,
+    };
+    Widget cell(String text, int c, {bool head = false}) => Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      child: Text.rich(
+        rich(text, head ? body.copyWith(fontWeight: FontWeight.w800) : body),
+        textAlign: align(c),
+      ),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Table(
+          defaultColumnWidth: const IntrinsicColumnWidth(),
+          border: TableBorder.all(color: scheme.outlineVariant),
+          children: [
+            TableRow(
+              decoration: BoxDecoration(color: scheme.surfaceContainerHighest),
+              children: [
+                for (var c = 0; c < b.header.length; c++)
+                  cell(b.header[c], c, head: true),
+              ],
+            ),
+            for (final row in b.rows)
+              TableRow(
+                children: [
+                  for (var c = 0; c < row.length; c++) cell(row[c], c),
+                ],
+              ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -195,6 +284,8 @@ class _MarkdownViewState extends State<MarkdownView> {
                 padding: EdgeInsets.symmetric(vertical: 10),
                 child: Divider(),
               ),
+              ImageBlock() => _picture(b, scheme),
+              TableBlock() => _table(b, body, scheme, rich),
             },
         ],
       ),
