@@ -1,6 +1,10 @@
 import 'package:material_ui/material_ui.dart';
+
+import '../core/l10n.dart';
+
 import 'package:provider/provider.dart';
 
+import '../core/adaptive.dart';
 import '../core/modules.dart';
 import '../core/settings.dart';
 import '../modules/calendar/calendar_page.dart' show eventColors;
@@ -16,9 +20,9 @@ class HomePage extends StatelessWidget {
 
   String get _greeting {
     final hour = DateTime.now().hour;
-    if (hour < 5) return 'Bonne nuit';
-    if (hour < 18) return 'Bonjour';
-    return 'Bonsoir';
+    if (hour < 5) return tr('Bonne nuit');
+    if (hour < 18) return tr('Bonjour');
+    return tr('Bonsoir');
   }
 
   @override
@@ -41,7 +45,7 @@ class HomePage extends StatelessWidget {
         title: Text(_greeting),
         actions: [
           IconButton(
-            tooltip: 'Réglages',
+            tooltip: tr('Réglages'),
             icon: const Icon(Icons.settings_outlined),
             onPressed: () => Navigator.of(context)
                 .push(MaterialPageRoute(builder: (_) => const SettingsPage())),
@@ -52,7 +56,7 @@ class HomePage extends StatelessWidget {
         padding: const EdgeInsets.only(bottom: 96),
         children: [
           if (notes.isNotEmpty) ...[
-            const SectionTitle('Reprendre'),
+            SectionTitle(tr('Reprendre')),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: _ResumeCard(
@@ -67,7 +71,7 @@ class HomePage extends StatelessWidget {
               "Aujourd'hui",
               trailing: TextButton(
                 onPressed: () => moduleById('tasks').open(context),
-                child: const Text('Tout voir'),
+                child: Text(tr('Tout voir')),
               ),
             ),
             Padding(
@@ -94,7 +98,7 @@ class HomePage extends StatelessWidget {
                         ),
                         subtitle: Text(
                           e.allDay
-                              ? 'Toute la journée'
+                              ? tr('Toute la journée')
                               : '${e.start.hour}:${e.start.minute.toString().padLeft(2, '0')}',
                         ),
                         onTap: () => moduleById('calendar').open(context),
@@ -106,12 +110,12 @@ class HomePage extends StatelessWidget {
               ),
             ),
           ],
-          const SectionTitle('Raccourcis'),
+          SectionTitle(tr('Raccourcis')),
           if (pinned.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Text(
-                'Appuyez longuement sur un module pour l\'épingler ici.',
+                tr("Appuyez longuement sur un module pour l'épingler ici."),
               ),
             )
           else
@@ -120,16 +124,21 @@ class HomePage extends StatelessWidget {
               child: GridView.count(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-                crossAxisCount: 4,
+                crossAxisCount: columnsFor(
+                  contentWidth(MediaQuery.sizeOf(context).width) - 16,
+                  96,
+                  min: 4,
+                  max: 10,
+                ),
                 childAspectRatio: 0.82,
                 children: [for (final m in pinned) _Shortcut(m)],
               ),
             ),
           SectionTitle(
-            'Notes récentes',
+            tr('Notes récentes'),
             trailing: TextButton(
               onPressed: () => moduleById('notes').open(context),
-              child: const Text('Tout voir'),
+              child: Text(tr('Tout voir')),
             ),
           ),
           if (notes.isEmpty)
@@ -139,8 +148,8 @@ class HomePage extends StatelessWidget {
                 child: ListTile(
                   contentPadding: const EdgeInsets.all(16),
                   leading: ModuleIcon(moduleById('notes')),
-                  title: const Text('Aucune note pour le moment'),
-                  subtitle: const Text('Appuyez pour écrire la première'),
+                  title: Text(tr('Aucune note pour le moment')),
+                  subtitle: Text(tr('Appuyez pour écrire la première')),
                   onTap: () => openNote(context),
                 ),
               ),

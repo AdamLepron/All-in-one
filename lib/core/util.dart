@@ -1,3 +1,5 @@
+import 'l10n.dart';
+
 const _months = [
   'janv.',
   'févr.',
@@ -112,9 +114,11 @@ String dayLabel(DateTime date) {
     now.month,
     now.day,
   ).difference(DateTime(date.year, date.month, date.day)).inDays;
-  if (days == 0) return "Aujourd'hui";
-  if (days == 1) return 'Hier';
-  final day = '${date.day} ${_fullMonths[date.month - 1]}';
+  if (days == 0) return tr("Aujourd'hui");
+  if (days == 1) return tr('Hier');
+  final day = L10n.english
+      ? '${monthName(date.month - 1, _fullMonths)} ${date.day}'
+      : '${date.day} ${_fullMonths[date.month - 1]}';
   return date.year == now.year ? day : '$day ${date.year}';
 }
 
@@ -133,5 +137,6 @@ const _weekdays = [
 ];
 
 /// "lundi 16 novembre".
-String dayLabelLong(DateTime date) =>
-    '${_weekdays[date.weekday - 1]} ${date.day} ${_fullMonths[date.month - 1]}';
+String dayLabelLong(DateTime date) => L10n.english
+    ? '${weekdayName(date.weekday - 1, _weekdays)}, ${monthName(date.month - 1, _fullMonths)} ${date.day}'
+    : '${_weekdays[date.weekday - 1]} ${date.day} ${_fullMonths[date.month - 1]}';

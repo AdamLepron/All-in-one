@@ -1,7 +1,11 @@
+import 'dart:ui' show PlatformDispatcher;
+
 import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
+import 'core/adaptive.dart';
 import 'core/crash_log.dart';
+import 'core/l10n.dart';
 import 'core/notifications.dart';
 import 'core/settings.dart';
 import 'core/theme.dart';
@@ -83,7 +87,12 @@ class AllInOneApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<AppSettings>();
+    // Chosen once per rebuild so every screen below speaks the same language.
+    L10n.use(settings.language, PlatformDispatcher.instance.locale);
     return MaterialApp(
+      locale: L10n.locale,
+      supportedLocales: const [Locale('fr'), Locale('en')],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
       title: 'All-in-One',
       debugShowCheckedModeBanner: false,
       themeMode: settings.themeMode,
@@ -92,6 +101,17 @@ class AllInOneApp extends StatelessWidget {
         settings.accent,
         Brightness.dark,
         amoled: settings.amoled,
+      ),
+      // On a tablet or a wide window the app stays at a comfortable width,
+      // centred, instead of stretching lists and forms across the screen.
+      builder: (context, child) => ColoredBox(
+        color: Theme.of(context).colorScheme.surfaceContainerLowest,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: maxContentWidth),
+            child: child,
+          ),
+        ),
       ),
       home: const AppShell(),
     );

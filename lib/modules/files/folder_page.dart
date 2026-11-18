@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../core/settings.dart';
 import '../../core/util.dart';
+import '../gallery/vault_page.dart' show moveFilesToVault;
 import '../music/music_controller.dart';
 import '../transfer/transfer_page.dart';
 import '../reader/documents.dart';
@@ -130,6 +131,21 @@ class _FolderPageState extends State<FolderPage> {
             : "Impossible d'ouvrir ce fichier",
       );
     }
+  }
+
+  /// Encrypts the selected files into the protected folder.
+  Future<void> _toVault() async {
+    final paths = [
+      for (final p in _selected)
+        if (File(p).existsSync()) p,
+    ];
+    if (paths.isEmpty) return;
+    final moved = await moveFilesToVault(context, [
+      for (final p in paths) (p, false),
+    ]);
+    if (!mounted) return;
+    setState(_selected.clear);
+    if (moved.isNotEmpty) _load();
   }
 
   /// Compresses the selection into a zip next to the files.
@@ -441,6 +457,10 @@ class _FolderPageState extends State<FolderPage> {
                       PopupMenuItem(
                         value: _compress,
                         child: const Text('Compresser en .zip'),
+                      ),
+                      PopupMenuItem(
+                        value: _toVault,
+                        child: const Text('Déplacer vers le dossier protégé'),
                       ),
                       if (_selected.length == 1) ...[
                         PopupMenuItem(

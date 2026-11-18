@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/adaptive.dart';
 import '../../core/settings.dart';
 import '../../core/util.dart';
 import 'note_files.dart';
@@ -360,17 +361,23 @@ class _NotesList extends StatelessWidget {
         itemBuilder: (_, i) => NoteCard(note: notes[i], maxLines: 3),
       );
     }
-    // Two balanced columns so cards keep their natural height.
-    final columns = [<Note>[], <Note>[]];
+    // Balanced columns so cards keep their natural height: two on a phone,
+    // more on a tablet.
+    final count = columnsFor(
+      contentWidth(MediaQuery.sizeOf(context).width) - 32,
+      220,
+      max: 4,
+    );
+    final columns = [for (var c = 0; c < count; c++) <Note>[]];
     for (var i = 0; i < notes.length; i++) {
-      columns[i % 2].add(notes[i]);
+      columns[i % count].add(notes[i]);
     }
     return SingleChildScrollView(
       padding: padding,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          for (var c = 0; c < 2; c++) ...[
+          for (var c = 0; c < count; c++) ...[
             if (c == 1) const SizedBox(width: 10),
             Expanded(
               child: Column(

@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
+import '../core/adaptive.dart';
 import '../core/modules.dart';
 import '../core/settings.dart';
 
@@ -106,7 +107,11 @@ class ModuleGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final columns = MediaQuery.sizeOf(context).width >= 600 ? 4 : 2;
+    final columns = columnsFor(
+      contentWidth(MediaQuery.sizeOf(context).width) - 32,
+      170,
+      min: MediaQuery.sizeOf(context).width >= 600 ? 4 : 2,
+    );
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),

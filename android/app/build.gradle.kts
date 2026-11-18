@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -41,9 +43,25 @@ android {
         }
     }
 
+    // Store release: put your private key's details in android/key.properties
+    // (never committed; see docs/store/PUBLICATION.md). Without that file the
+    // test key above is used, so test APKs keep installing over each other.
+    val keyFile = rootProject.file("key.properties")
+    if (keyFile.exists()) {
+        val keys = Properties().apply { keyFile.inputStream().use { load(it) } }
+        signingConfigs {
+            create("store") {
+                storeFile = file(keys.getProperty("storeFile"))
+                storePassword = keys.getProperty("storePassword")
+                keyAlias = keys.getProperty("keyAlias")
+                keyPassword = keys.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("test")
+            signingConfig = signingConfigs.findByName("store") ?: signingConfigs.getByName("test")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

@@ -1,5 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
+import 'l10n.dart';
+
 /// Builds the app theme from a seed colour. [amoled] forces pure black
 /// surfaces in dark mode.
 ThemeData buildTheme(Color seed, Brightness brightness, {bool amoled = false}) {
@@ -62,7 +64,8 @@ enum Family {
   productivity('Productivité', Color(0xFF0A84FF)),
   tools('Utilitaires', Color(0xFF12A594));
 
-  const Family(this.label, this.color);
-  final String label;
+  const Family(this._label, this.color);
+  final String _label;
+  String get label => tr(_label);
   final Color color;
 }

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_tasks_description">Vos tâches du jour, et un bouton pour en ajouter une</string>
+    <string name="widget_note_description">Ouvre une note vide en un geste</string>
+</resources>

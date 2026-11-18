@@ -208,6 +208,17 @@ class MediaChannel {
     }
   }
 
+  /// Hands the home-screen widgets what they show ([json] is a map).
+  static Future<void> updateWidgets(String json) async {
+    try {
+      await _channel.invokeMethod<void>('widgetData', {'json': json});
+    } on MissingPluginException {
+      // not on a phone
+    } on PlatformException {
+      // the widgets keep their last content
+    }
+  }
+
   /// Handler for content shared while the app runs.
   static void onShared(void Function(Map<Object?, Object?> content) handler) {
     _channel.setMethodCallHandler((call) async {

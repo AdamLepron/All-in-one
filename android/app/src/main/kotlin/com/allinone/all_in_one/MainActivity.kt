@@ -186,6 +186,10 @@ class MainActivity : AudioServiceActivity() {
                 )
             )
             "sharedContent" -> result.success(intake.take())
+            "widgetData" -> {
+                WidgetData.save(this, call.argument<String>("json") ?: "{}")
+                result.success(null)
+            }
             "exportVideo" -> {
                 @Suppress("UNCHECKED_CAST")
                 video.export(call.arguments as Map<String, Any?>, result)

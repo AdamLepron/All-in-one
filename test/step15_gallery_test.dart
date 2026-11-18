@@ -143,18 +143,37 @@ void main() {
 
   group('vault storage', () {
     late Vault vault;
-    setUp(() => vault = Vault(directory: () async => '${tmp.path}/vault'));
+    setUp(
+      () => vault = Vault(
+        directory: () async => '${tmp.path}/vault',
+        tempDirectory: () async => '${tmp.path}/vault_tmp',
+        iterations: 1000,
+      ),
+    );
 
     test('add copies under a neutral name; restore brings it back', () async {
       final src = File('${tmp.path}/Photos/Secret.jpg')
         ..createSync(recursive: true)
         ..writeAsStringSync('contenu');
+      expect(() => vault.add(src.path, video: false), throwsStateError);
+      expect(await vault.unlock('2468'), isTrue);
       final item = await vault.add(src.path, video: false);
       expect(item.name, 'Secret.jpg');
+      expect(item.encrypted, isTrue);
       expect(item.stored.contains('Secret'), isFalse);
       expect(src.existsSync(), isTrue); // the caller deletes the original
       expect((await vault.items()).single.stored, item.stored);
-      expect(await (await vault.fileOf(item)).readAsString(), 'contenu');
+      // On disk it is unreadable; the key is needed to get it back.
+      expect(
+        (await (await vault.fileOf(item)).readAsBytes()).length,
+        isNot('contenu'.length),
+      );
+      expect(
+        String.fromCharCodes(await (await vault.fileOf(item)).readAsBytes())
+            .contains('contenu'),
+        isFalse,
+      );
+      expect(String.fromCharCodes(await vault.readBytes(item)), 'contenu');
 
       // A name already taken in the destination is kept apart.
       File('${tmp.path}/out/Secret.jpg')
@@ -165,10 +184,9 @@ void main() {
       expect(File(back).readAsStringSync(), 'contenu');
       expect(await vault.items(), isEmpty);
       expect(
-        Directory('${tmp.path}/vault')
-            .listSync()
-            .whereType<File>()
-            .where((f) => !f.path.endsWith('.json')),
+        Directory('${tmp.path}/vault').listSync().whereType<File>().where(
+          (f) => !f.path.endsWith('.json') && !f.path.endsWith('vault.key'),
+        ),
         isEmpty,
       );
     });
@@ -176,6 +194,7 @@ void main() {
     test('remove deletes for good; vanished files are forgotten', () async {
       final a = File('${tmp.path}/a.jpg')..writeAsStringSync('a');
       final b = File('${tmp.path}/b.mp4')..writeAsStringSync('b');
+      await vault.unlock('2468');
       final ia = await vault.add(a.path, video: false);
       final ib = await vault.add(b.path, video: true);
       expect((await vault.items()).map((i) => i.video).toSet(), {false, true});
@@ -185,6 +204,41 @@ void main() {
       (await vault.fileOf(ib)).deleteSync();
       expect(await vault.items(), isEmpty);
     });
+
+    test('wrong code is refused; locking forgets the key', () async {
+      expect(await vault.unlock('2468'), isTrue);
+      vault.lock();
+      expect(vault.unlocked, isFalse);
+      expect(await vault.unlock('1111'), isFalse);
+      expect(await vault.unlock('2468'), isTrue);
+    });
+
+    test('changing the code keeps the content readable', () async {
+      final f = File('${tmp.path}/x.jpg')..writeAsStringSync('xyz');
+      await vault.unlock('2468');
+      final item = await vault.add(f.path, video: false);
+      await vault.changePin('1357');
+      vault.lock();
+      expect(await vault.unlock('2468'), isFalse);
+      expect(await vault.unlock('1357'), isTrue);
+      expect(String.fromCharCodes(await vault.readBytes(item)), 'xyz');
+    });
+
+    test(
+      'files put away by version 1.5 are encrypted at first unlock',
+      () async {
+        final dir = Directory('${tmp.path}/vault')..createSync(recursive: true);
+        File('${dir.path}/old123').writeAsStringSync('ancien');
+        File('${dir.path}/index.json').writeAsStringSync(
+          '[{"s":"old123","n":"Vieux.jpg","v":false,"a":1700000000000,"z":6}]',
+        );
+        expect(await vault.unlock('2468'), isTrue);
+        final item = (await vault.items()).single;
+        expect(item.encrypted, isTrue);
+        expect(File('${dir.path}/old123').existsSync(), isFalse);
+        expect(String.fromCharCodes(await vault.readBytes(item)), 'ancien');
+      },
+    );
 
     test('a damaged index reads as an empty vault', () async {
       Directory('${tmp.path}/vault').createSync(recursive: true);
@@ -196,7 +250,11 @@ void main() {
   testWidgets('vault screen: choose a code, wrong code, then open', (
     tester,
   ) async {
-    final vault = Vault(directory: () async => '${tmp.path}/vault');
+    final vault = Vault(
+      directory: () async => '${tmp.path}/vault',
+      tempDirectory: () async => '${tmp.path}/vault_tmp',
+      iterations: 1000,
+    );
     Widget app() => ChangeNotifierProvider.value(
       value: settings,
       child: MaterialApp(home: VaultPage(vault: vault)),

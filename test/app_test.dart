@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:all_in_one/core/l10n.dart';
 import 'package:all_in_one/core/settings.dart';
 import 'package:all_in_one/main.dart';
 import 'package:all_in_one/modules/calendar/calendar_page.dart';
@@ -70,6 +71,7 @@ void main() {
       await loadFonts();
       SharedPreferences.setMockInitialValues({});
       settings = await AppSettings.load();
+      settings.language = AppLanguage.fr;
       await databaseFactory.deleteDatabase(
         '${await getDatabasesPath()}/notes.db',
       );
@@ -197,7 +199,7 @@ void main() {
     await tester.enterText(find.byType(TextField).last, 'Pain, lait, œufs');
     await tester.pump();
     await shot('02_note_editor');
-    await tester.pageBack();
+    await tester.tap(find.byType(BackButton));
     await settle();
     expect(notes.notes.single.title, 'Courses');
 
@@ -227,7 +229,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Réunion lundi'), findsOneWidget);
     await shot('04_notes');
-    await tester.pageBack();
+    await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
 
     // Tools tab and calculator.
@@ -246,7 +248,7 @@ void main() {
     await tester.pump();
     expect(find.text('56'), findsOneWidget);
     expect(settings.calcHistory.first, '7×8 = 56');
-    await tester.pageBack();
+    await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
 
     // Converter.
@@ -254,7 +256,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('0,001'), findsOneWidget); // 1 m in km
     await shot('07_converter');
-    await tester.pageBack();
+    await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
 
     // Media tab (all coming soon) and search.
@@ -326,9 +328,9 @@ void main() {
     await shot('14_now_playing');
     await tester.tap(find.byTooltip('Réduire'));
     await tester.pumpAndSettle();
-    await tester.pageBack();
+    await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
-    await tester.pageBack();
+    await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
 
     // Gallery timeline, albums, viewer and video library.
@@ -376,13 +378,13 @@ void main() {
     await shot('23_viewer');
     await tester.tap(find.byTooltip('Retour'));
     await tester.pumpAndSettle();
-    await tester.pageBack();
+    await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Lecteur vidéo').last);
     await settle();
     expect(find.text('Reprendre à 0:42'), findsOneWidget);
     await shot('24_videos');
-    await tester.pageBack();
+    await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
 
     // File manager home, then a folder with selection and trash.
@@ -392,7 +394,7 @@ void main() {
     await settle();
     expect(find.text('Accès rapide'), findsOneWidget);
     await shot('15_files_home');
-    await tester.pageBack();
+    await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
 
     final trash = Trash('${tmp.path}/.trash');
@@ -430,9 +432,9 @@ void main() {
     await settle();
     expect(File('${tmp.path}/Photos/photo.jpg').existsSync(), true);
     expect(find.text('photo.jpg'), findsOneWidget);
-    await tester.pageBack();
+    await tester.tap(find.byType(BackButton));
     await settle();
-    await tester.pageBack();
+    await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
 
     // Document library and text viewer.
@@ -446,11 +448,11 @@ void main() {
     await settle();
     expect(find.text('- Pain'), findsOneWidget);
     await shot('25_text_viewer');
-    await tester.pageBack();
+    await tester.tap(find.byType(BackButton));
     await settle();
     expect(find.text('Reprendre la lecture'), findsOneWidget);
     await shot('26_documents');
-    await tester.pageBack();
+    await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
 
     // Equaliser: a preset changes the bands and enables the effect.
@@ -469,7 +471,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Gauche 30 %'), findsOneWidget);
     await shot('27_equalizer');
-    await tester.pageBack();
+    await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
 
     // Step 5 tools, each opened directly.
@@ -485,7 +487,7 @@ void main() {
     }
 
     Future<void> close() async {
-      await tester.pageBack();
+      await tester.tap(find.byType(BackButton));
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pump(const Duration(milliseconds: 500));
     }

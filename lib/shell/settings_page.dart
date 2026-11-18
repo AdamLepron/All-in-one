@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
 import '../core/crash_log.dart';
+import '../core/l10n.dart';
 import '../core/settings.dart';
 import '../modules/backup/backup_page.dart';
 import 'incidents_page.dart';
@@ -27,28 +28,28 @@ class SettingsPage extends StatelessWidget {
     );
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Réglages')),
+      appBar: AppBar(title: Text(tr('Réglages'))),
       body: ListView(
         children: [
-          label('Thème'),
+          label(tr('Thème')),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: SegmentedButton<ThemeMode>(
-              segments: const [
+              segments: [
                 ButtonSegment(
                   value: ThemeMode.system,
                   icon: Icon(Icons.brightness_auto_outlined),
-                  label: Text('Système'),
+                  label: Text(tr('Système')),
                 ),
                 ButtonSegment(
                   value: ThemeMode.light,
                   icon: Icon(Icons.light_mode_outlined),
-                  label: Text('Clair'),
+                  label: Text(tr('Clair')),
                 ),
                 ButtonSegment(
                   value: ThemeMode.dark,
                   icon: Icon(Icons.dark_mode_outlined),
-                  label: Text('Sombre'),
+                  label: Text(tr('Sombre')),
                 ),
               ],
               selected: {settings.themeMode},
@@ -57,12 +58,12 @@ class SettingsPage extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           SwitchListTile(
-            title: const Text('Noir AMOLED'),
-            subtitle: const Text('Fond noir pur en thème sombre'),
+            title: Text(tr('Noir AMOLED')),
+            subtitle: Text(tr('Fond noir pur en thème sombre')),
             value: settings.amoled,
             onChanged: (v) => settings.amoled = v,
           ),
-          label("Couleur d'accent"),
+          label(tr("Couleur d'accent")),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Wrap(
@@ -95,20 +96,35 @@ class SettingsPage extends StatelessWidget {
               ],
             ),
           ),
-          label('Données'),
+          label(tr('Langue')),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: SegmentedButton<AppLanguage>(
+              segments: [
+                for (final l in AppLanguage.values)
+                  ButtonSegment(
+                    value: l,
+                    label: Text(L10n.english ? l.labelEn : l.labelFr),
+                  ),
+              ],
+              selected: {settings.language},
+              onSelectionChanged: (s) => settings.language = s.first,
+            ),
+          ),
+          label(tr('Données')),
           ListTile(
             leading: const Icon(Icons.backup_outlined),
-            title: const Text('Sauvegarde et restauration'),
-            subtitle: const Text('Notes, tâches, événements, réglages'),
+            title: Text(tr('Sauvegarde et restauration')),
+            subtitle: Text(tr('Notes, tâches, événements, réglages')),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(
               context,
             ).push(MaterialPageRoute<void>(builder: (_) => const BackupPage())),
           ),
-          label('Diagnostic'),
+          label(tr('Diagnostic')),
           ListTile(
             leading: const Icon(Icons.bug_report_outlined),
-            title: const Text("Journal d'incidents"),
+            title: Text(tr("Journal d'incidents")),
             subtitle: Text(
               CrashLog.count == 0
                   ? 'Aucun incident'
@@ -123,11 +139,11 @@ class SettingsPage extends StatelessWidget {
               if (context.mounted) (context as Element).markNeedsBuild();
             },
           ),
-          label('À propos'),
+          label(tr('À propos')),
           const ListTile(
             leading: Icon(Icons.info_outline),
             title: Text('All-in-One'),
-            subtitle: Text('Version 1.6.0 · Finitions des utilitaires'),
+            subtitle: Text('Version 2.0.0 · En ligne et ouverture'),
           ),
         ],
       ),

@@ -21,23 +21,29 @@ import '../modules/gallery/gallery_page.dart';
 import '../modules/video/video_page.dart';
 import '../modules/music/music_page.dart';
 import '../modules/notes/notes_page.dart';
+import '../modules/radio/radio_page.dart';
 import '../shell/coming_soon_page.dart';
+import 'l10n.dart';
 import 'theme.dart';
 
 /// One entry of the application catalogue.
 class AppModule {
   const AppModule(
     this.id,
-    this.name,
-    this.description,
+    this._name,
+    this._description,
     this.icon,
     this.family, [
     this.builder,
   ]);
 
   final String id;
-  final String name;
-  final String description;
+  final String _name;
+  final String _description;
+
+  /// Shown in the language chosen by the user.
+  String get name => tr(_name);
+  String get description => tr(_description);
   final IconData icon;
   final Family family;
 
@@ -76,6 +82,14 @@ final modules = <AppModule>[
     Icons.music_note_rounded,
     Family.media,
     (_) => const MusicPage(),
+  ),
+  AppModule(
+    'radio',
+    'Radios et podcasts',
+    'Écoutez en ligne',
+    Icons.podcasts_rounded,
+    Family.media,
+    (_) => const RadioPage(),
   ),
   AppModule(
     'equalizer',

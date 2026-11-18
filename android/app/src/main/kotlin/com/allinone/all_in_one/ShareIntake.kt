@@ -28,6 +28,14 @@ class ShareIntake(
     fun handle(intent: Intent?) {
         intent ?: return
         val action = intent.action ?: return
+        // A tap on a home-screen widget: tell Dart where to go.
+        if (action == "com.allinone.OPEN") {
+            if (intent.getBooleanExtra(HANDLED, false)) return
+            intent.putExtra(HANDLED, true)
+            val target = intent.getStringExtra(TARGET) ?: return
+            if (target != "home") deliver(mapOf("action" to "open", "target" to target))
+            return
+        }
         if (action != Intent.ACTION_SEND && action != Intent.ACTION_SEND_MULTIPLE && action != Intent.ACTION_VIEW) return
         // An intent is processed once, even if the activity is recreated.
         if (intent.getBooleanExtra(HANDLED, false)) return
@@ -124,7 +132,8 @@ class ShareIntake(
         root.listFiles()?.forEach { if (it.lastModified() < limit) it.deleteRecursively() }
     }
 
-    private companion object {
-        const val HANDLED = "allinone_handled"
+    companion object {
+        private const val HANDLED = "allinone_handled"
+        const val TARGET = "allinone_target"
     }
 }

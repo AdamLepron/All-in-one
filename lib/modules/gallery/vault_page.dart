@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
+import 'package:open_filex/open_filex.dart';
 import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 
@@ -13,25 +14,123 @@ import '../video/video_player_page.dart';
 import 'media_library.dart';
 import 'vault.dart';
 
+/// Asks for the code and opens [vault]. Returns false when cancelled or
+/// refused. Also lets the owner create the code the first time.
+Future<bool> ensureVaultUnlocked(BuildContext context, Vault vault) async {
+  if (vault.unlocked) return true;
+  final settings = context.read<AppSettings>();
+  final lock = VaultLock(settings);
+  if (!lock.hasPin) {
+    showMessage(context, "Créez d'abord un code dans le dossier protégé");
+    return false;
+  }
+  final controller = TextEditingController();
+  String? message;
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (dialog) => StatefulBuilder(
+      builder: (context, setLocal) => AlertDialog(
+        title: const Text('Code du dossier protégé'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: controller,
+              autofocus: true,
+              obscureText: true,
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.center,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(8),
+              ],
+              decoration: const InputDecoration(hintText: 'Code'),
+            ),
+            if (message != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  message!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final pin = controller.text;
+              switch (lock.check(pin)) {
+                case PinResult.ok:
+                  if (await vault.unlock(pin)) {
+                    if (dialog.mounted) Navigator.pop(dialog, true);
+                  } else {
+                    setLocal(() => message = 'Code incorrect');
+                  }
+                case PinResult.wrong:
+                  controller.clear();
+                  setLocal(
+                    () => message =
+                        'Code incorrect · ${lock.triesLeft} essai${lock.triesLeft > 1 ? 's' : ''} restant${lock.triesLeft > 1 ? 's' : ''}',
+                  );
+                case PinResult.locked:
+                  controller.clear();
+                  final until = lock.lockedUntil;
+                  setLocal(
+                    () => message = until == null
+                        ? "Trop d'essais"
+                        : "Trop d'essais : réessayez à ${until.hour}:${until.minute.toString().padLeft(2, '0')}",
+                  );
+              }
+            },
+            child: const Text('Ouvrir'),
+          ),
+        ],
+      ),
+    ),
+  );
+  controller.dispose();
+  return ok == true;
+}
+
 /// Moves photos and videos out of the gallery into the protected folder.
 /// Returns how many were moved.
 Future<int> moveToVault(BuildContext context, List<Media> items) async {
-  if (items.isEmpty) return 0;
-  final settings = context.read<AppSettings>();
   final library = context.read<MediaLibrary>();
-  final messenger = ScaffoldMessenger.of(context);
-  if (!VaultLock(settings).hasPin) {
-    showMessage(context, "Créez d'abord un code dans le dossier protégé");
-    return 0;
+  final moved = await moveFilesToVault(context, [
+    for (final m in items) (m.path, m.video),
+  ]);
+  if (moved.isNotEmpty) {
+    library.forget([
+      for (final m in items)
+        if (moved.contains(m.path)) m,
+    ]);
   }
+  return moved.length;
+}
+
+/// Moves any files into the protected folder (asking for the code), then
+/// removes the originals. Returns the paths that were moved.
+Future<Set<String>> moveFilesToVault(
+  BuildContext context,
+  List<(String path, bool video)> files, {
+  Vault? vault,
+}) async {
+  if (files.isEmpty) return {};
+  final v = vault ?? Vault.shared;
+  final messenger = ScaffoldMessenger.of(context);
   final ok = await showDialog<bool>(
     context: context,
     builder: (dialog) => AlertDialog(
       title: const Text('Déplacer vers le dossier protégé ?'),
       content: Text(
-        '${items.length} élément${items.length > 1 ? 's' : ''} '
-        'disparaîtr${items.length > 1 ? 'ont' : 'a'} de la galerie et '
-        'ne se retrouver${items.length > 1 ? 'ont' : 'a'} que dans le dossier protégé.',
+        '${files.length} élément${files.length > 1 ? 's' : ''} '
+        'sera${files.length > 1 ? 'ont' : ''} chiffré${files.length > 1 ? 's' : ''} '
+        'et ne se retrouver${files.length > 1 ? 'ont' : 'a'} que dans le dossier protégé.',
       ),
       actions: [
         TextButton(
@@ -45,24 +144,23 @@ Future<int> moveToVault(BuildContext context, List<Media> items) async {
       ],
     ),
   );
-  if (ok != true || !context.mounted) return 0;
-  if (!await ensureFullFileAccess(context)) return 0;
-  final vault = Vault();
-  final moved = <Media>[];
-  for (final m in items) {
+  if (ok != true || !context.mounted) return {};
+  if (!await ensureFullFileAccess(context) || !context.mounted) return {};
+  if (!await ensureVaultUnlocked(context, v)) return {};
+  final moved = <String>{};
+  for (final (path, video) in files) {
     try {
-      await vault.add(m.path, video: m.video);
-      // Only once the copy is safe does the original go.
-      await deleteForever(m.path);
-      moved.add(m);
+      await v.add(path, video: video);
+      // Only once the encrypted copy is safe does the original go.
+      await deleteForever(path);
+      moved.add(path);
     } on Object {
       continue; // left in place
     }
   }
-  if (moved.isNotEmpty) {
-    await MediaChannel.rescan([for (final m in moved) m.path]);
-    library.forget(moved);
-  }
+  if (moved.isNotEmpty) await MediaChannel.rescan(moved.toList());
+  // Closed again: opening it later asks for the code once more.
+  await v.lock();
   messenger
     ..clearSnackBars()
     ..showSnackBar(
@@ -74,7 +172,7 @@ Future<int> moveToVault(BuildContext context, List<Media> items) async {
         ),
       ),
     );
-  return moved.length;
+  return moved;
 }
 
 /// The protected folder: asks for the code, then shows what is inside.
@@ -89,7 +187,7 @@ class VaultPage extends StatefulWidget {
 class _VaultPageState extends State<VaultPage> with WidgetsBindingObserver {
   late final AppSettings _settings = context.read<AppSettings>();
   late final VaultLock _lock = VaultLock(_settings);
-  late final Vault _vault = widget.vault ?? Vault();
+  late final Vault _vault = widget.vault ?? Vault.shared;
 
   bool _unlocked = false;
   List<VaultItem> _items = const [];
@@ -108,6 +206,7 @@ class _VaultPageState extends State<VaultPage> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     MediaChannel.secure(false);
+    _vault.lock();
     _code.dispose();
     _confirm.dispose();
     super.dispose();
@@ -128,6 +227,7 @@ class _VaultPageState extends State<VaultPage> with WidgetsBindingObserver {
     _confirm.clear();
     _message = null;
     MediaChannel.secure(false);
+    _vault.lock();
   }
 
   Future<void> _open() async {
@@ -158,13 +258,19 @@ class _VaultPageState extends State<VaultPage> with WidgetsBindingObserver {
         setState(() => _message = 'Les deux codes sont différents');
       } else {
         _lock.setPin(pin);
+        await _vault.unlock(pin);
         await _open();
       }
       return;
     }
     switch (_lock.check(pin)) {
       case PinResult.ok:
-        await _open();
+        if (await _vault.unlock(pin)) {
+          await _open();
+        } else {
+          _code.clear();
+          setState(() => _message = 'Code incorrect');
+        }
       case PinResult.wrong:
         _code.clear();
         setState(
@@ -271,16 +377,40 @@ class _VaultPageState extends State<VaultPage> with WidgetsBindingObserver {
     );
     if (pin == null || !mounted) return;
     if (VaultLock.valid(pin)) {
+      await _vault.changePin(pin);
       _lock.setPin(pin);
-      showMessage(context, 'Code changé');
+      if (mounted) showMessage(context, 'Code changé');
     } else {
       showMessage(context, 'Le code doit avoir de 4 à 8 chiffres');
     }
   }
 
+  static const _imageExt = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'};
+  bool _isImage(VaultItem i) =>
+      _imageExt.contains(p.extension(i.name).toLowerCase());
+
+  Future<Uint8List?> _thumb(VaultItem item) async {
+    if (item.video || !_isImage(item) || !_vault.unlocked) return null;
+    try {
+      return await _vault.thumbnail(item);
+    } on Object {
+      return null;
+    }
+  }
+
   Future<void> _view(VaultItem item) async {
-    final file = await _vault.fileOf(item);
+    final File file;
+    try {
+      file = await _vault.decryptToTemp(item);
+    } on Object {
+      if (mounted) showMessage(context, 'Lecture impossible');
+      return;
+    }
     if (!mounted) return;
+    if (!item.video && !_isImage(item)) {
+      await OpenFilex.open(file.path);
+      return;
+    }
     if (item.video) {
       final media = Media(
         id: item.stored.hashCode.abs(),
@@ -407,8 +537,8 @@ class _VaultPageState extends State<VaultPage> with WidgetsBindingObserver {
                 itemBuilder: (_, i) {
                   final item = _items[i];
                   final picked = _selected.contains(item.stored);
-                  return FutureBuilder<File>(
-                    future: _vault.fileOf(item),
+                  return FutureBuilder<Uint8List?>(
+                    future: _thumb(item),
                     builder: (_, snap) {
                       void toggle() => setState(() {
                         picked
@@ -426,19 +556,23 @@ class _VaultPageState extends State<VaultPage> with WidgetsBindingObserver {
                           child: Stack(
                             fit: StackFit.expand,
                             children: [
-                              if (snap.data == null || item.video)
+                              if (snap.data == null ||
+                                  item.video ||
+                                  !_isImage(item))
                                 ColoredBox(
                                   color: scheme.surfaceContainerHighest,
                                   child: Icon(
                                     item.video
                                         ? Icons.play_circle_outline
-                                        : Icons.image_outlined,
+                                        : _isImage(item)
+                                        ? Icons.image_outlined
+                                        : Icons.insert_drive_file_outlined,
                                     size: 36,
                                     color: scheme.onSurfaceVariant,
                                   ),
                                 )
                               else
-                                Image.file(
+                                Image.memory(
                                   snap.data!,
                                   fit: BoxFit.cover,
                                   cacheWidth: 300,
