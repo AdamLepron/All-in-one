@@ -16,6 +16,7 @@ enum _Tab {
   adjust('Ajuster', Icons.tune_rounded),
   filters('Filtres', Icons.auto_awesome_rounded),
   crop('Rogner', Icons.crop_rounded),
+  text('Texte', Icons.text_fields_rounded),
   draw('Dessiner', Icons.brush_rounded);
 
   const _Tab(this.label, this.icon);
@@ -24,6 +25,8 @@ enum _Tab {
 }
 
 const _adjustIcons = <Adjust, IconData>{
+  Adjust.exposure: Icons.exposure_rounded,
+  Adjust.tint: Icons.colorize_rounded,
   Adjust.brightness: Icons.brightness_6_rounded,
   Adjust.contrast: Icons.contrast_rounded,
   Adjust.saturation: Icons.water_drop_outlined,
@@ -72,6 +75,8 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
   int _penColor = _penColors[2];
   double _penWidth = 6;
   bool _comparing = false;
+  int _textSelected = -1;
+  int _textColor = _penColors[0];
   bool _saving = false;
 
   @override
@@ -174,6 +179,8 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
   Future<void> _save() async {
     final library = context.read<MediaLibrary>();
     final messenger = ScaffoldMessenger.of(context);
+    final options = await _askExport();
+    if (options == null || !mounted) return;
     var dir = widget.outputDir;
     if (dir == null) {
       if (!await ensureFullFileAccess(context)) return;
@@ -181,7 +188,12 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
     }
     setState(() => _saving = true);
     try {
-      final saved = await saveEditedCopy(widget.path, _state, dir: dir);
+      final saved = await saveEditedCopy(
+        widget.path,
+        _state,
+        dir: dir,
+        options: options,
+      );
       await MediaChannel.rescan([saved]);
       unawaited(library.load(request: false));
       if (!mounted) return;
@@ -295,7 +307,8 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
   /// Photo area. Cropping and drawing work on the whole picture; the other
   /// tabs show the cropped result.
   Widget _canvas(ui.Image image) {
-    final showFull = _tab == _Tab.crop || _tab == _Tab.draw;
+    final showFull =
+        _tab == _Tab.crop || _tab == _Tab.draw || _tab == _Tab.text;
     final shown = _comparing ? const EditState() : _state;
     final size = outputSize(image, shown, applyCrop: !showFull);
     return Padding(
@@ -305,7 +318,8 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
           aspectRatio: size.width / size.height,
           child: GestureDetector(
             // Hold to compare with the original.
-            onLongPressStart: showFull && _tab == _Tab.draw
+            onLongPressStart:
+                showFull && (_tab == _Tab.draw || _tab == _Tab.text)
                 ? null
                 : (_) => setState(() => _comparing = true),
             onLongPressEnd: (_) => setState(() => _comparing = false),
@@ -322,6 +336,19 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
                     onStart: _begin,
                     onChanged: (r) =>
                         setState(() => _state = _state.copyWith(crop: r)),
+                    onEnd: _end,
+                    child: paint,
+                  ),
+                  _Tab.text => _TextLayer(
+                    texts: _state.texts,
+                    selected: _textSelected,
+                    onSelect: (i) => setState(() => _textSelected = i),
+                    onStart: _begin,
+                    onMove: (i, p) => setState(() {
+                      final list = [..._state.texts];
+                      list[i] = list[i].copyWith(position: p);
+                      _state = _state.copyWith(texts: list);
+                    }),
                     onEnd: _end,
                     child: paint,
                   ),
@@ -365,13 +392,14 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
 
   Widget _panel(ui.Image image) {
     return Container(
-      height: 148,
+      height: _tab == _Tab.crop || _tab == _Tab.text ? 204 : 148,
       color: const Color(0xFF17171C),
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: switch (_tab) {
         _Tab.adjust => _adjustPanel(),
         _Tab.filters => _filtersPanel(image),
         _Tab.crop => _cropPanel(),
+        _Tab.text => _textPanel(),
         _Tab.draw => _drawPanel(),
       },
     );
@@ -554,6 +582,36 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
             ],
           ),
         ),
+        Row(
+          children: [
+            const SizedBox(width: 16),
+            const Icon(Icons.straighten_rounded, size: 20),
+            Expanded(
+              child: Slider(
+                min: -maxStraighten,
+                max: maxStraighten,
+                divisions: (maxStraighten * 2 * 2).round(),
+                label: '${_state.straighten.toStringAsFixed(1)}°',
+                value: _state.straighten.clamp(-maxStraighten, maxStraighten),
+                onChangeStart: (_) => _begin(),
+                onChanged: (v) => setState(() {
+                  // A small pull towards level makes it easy to reset.
+                  _state = _state.copyWith(straighten: v.abs() < 0.4 ? 0 : v);
+                }),
+                onChangeEnd: (_) => _end(),
+              ),
+            ),
+            SizedBox(
+              width: 52,
+              child: Text(
+                'Redresser\n${_state.straighten.toStringAsFixed(1)}°',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 11),
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
+        ),
         Expanded(
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -590,6 +648,282 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
           ),
         ),
       ],
+    );
+  }
+
+  Future<String?> _askText(String title, [String initial = '']) {
+    final controller = TextEditingController(text: initial);
+    return showDialog<String>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLines: 3,
+          minLines: 1,
+          textCapitalization: TextCapitalization.sentences,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialog, controller.text.trim()),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _updateSelectedText(TextItem Function(TextItem) change) {
+    final i = _textSelected;
+    if (i < 0 || i >= _state.texts.length) return;
+    final list = [..._state.texts];
+    list[i] = change(list[i]);
+    _apply(_state.copyWith(texts: list));
+  }
+
+  Widget _textPanel() {
+    final i = _textSelected;
+    final item = i >= 0 && i < _state.texts.length ? _state.texts[i] : null;
+    return Column(
+      children: [
+        SizedBox(
+          height: 52,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: FilledButton.tonalIcon(
+                  icon: const Icon(Icons.add),
+                  label: const Text('Ajouter du texte'),
+                  onPressed: () async {
+                    final text = await _askText('Votre texte');
+                    if (text == null || text.isEmpty) return;
+                    _apply(
+                      _state.copyWith(
+                        texts: [
+                          ..._state.texts,
+                          TextItem(text, color: _textColor),
+                        ],
+                      ),
+                    );
+                    setState(() => _textSelected = _state.texts.length - 1);
+                  },
+                ),
+              ),
+              for (final c in _penColors)
+                Semantics(
+                  label: 'Couleur du texte',
+                  button: true,
+                  child: GestureDetector(
+                    onTap: () {
+                      setState(() => _textColor = c);
+                      _updateSelectedText((t) => t.copyWith(color: c));
+                    },
+                    child: Container(
+                      width: 48,
+                      height: 48,
+                      alignment: Alignment.center,
+                      child: Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: Color(c),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            width: _textColor == c ? 3 : 1,
+                            color: _textColor == c
+                                ? Colors.white54
+                                : Colors.white24,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        if (item == null)
+          const Expanded(
+            child: Center(
+              child: Text(
+                'Touchez un texte pour le modifier, faites-le glisser pour le déplacer.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12),
+              ),
+            ),
+          )
+        else ...[
+          Row(
+            children: [
+              const SizedBox(width: 16),
+              const Icon(Icons.format_size_rounded, size: 20),
+              Expanded(
+                child: Slider(
+                  min: 0.03,
+                  max: 0.2,
+                  value: item.size.clamp(0.03, 0.2),
+                  onChangeStart: (_) => _begin(),
+                  onChanged: (v) => setState(() {
+                    final list = [..._state.texts];
+                    list[i] = item.copyWith(size: v);
+                    _state = _state.copyWith(texts: list);
+                  }),
+                  onChangeEnd: (_) => _end(),
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
+          ),
+          Expanded(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                IconButton(
+                  tooltip: 'Modifier le texte',
+                  icon: const Icon(Icons.edit_outlined),
+                  onPressed: () async {
+                    final text = await _askText('Modifier le texte', item.text);
+                    if (text != null && text.isNotEmpty) {
+                      _updateSelectedText((t) => t.copyWith(text: text));
+                    }
+                  },
+                ),
+                IconButton(
+                  tooltip: item.bold ? 'Texte normal' : 'Texte en gras',
+                  isSelected: item.bold,
+                  icon: const Icon(Icons.format_bold_rounded),
+                  onPressed: () =>
+                      _updateSelectedText((t) => t.copyWith(bold: !t.bold)),
+                ),
+                IconButton(
+                  tooltip: item.background ? 'Sans fond' : 'Avec un fond',
+                  isSelected: item.background,
+                  icon: const Icon(Icons.rectangle_rounded),
+                  onPressed: () => _updateSelectedText(
+                    (t) => t.copyWith(background: !t.background),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Supprimer le texte',
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: () {
+                    final list = [..._state.texts]..removeAt(i);
+                    setState(() => _textSelected = -1);
+                    _apply(_state.copyWith(texts: list));
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// Asks how the photo should be written; null when cancelled.
+  Future<ExportOptions?> _askExport() {
+    final natural = outputSize(_image!, _state);
+    var png = false;
+    var quality = 92.0;
+    var maxSide = 0;
+    return showModalBottomSheet<ExportOptions>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF17171C),
+      builder: (sheet) => StatefulBuilder(
+        builder: (context, setLocal) {
+          final options = ExportOptions(
+            png: png,
+            quality: quality.round(),
+            maxSide: maxSide,
+          );
+          final size = options.scaled(natural);
+          return SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Options d'enregistrement",
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 12),
+                  const Text('Format'),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      ChoiceChip(
+                        label: const Text('JPEG (léger)'),
+                        selected: !png,
+                        onSelected: (_) => setLocal(() => png = false),
+                      ),
+                      ChoiceChip(
+                        label: const Text('PNG (sans perte)'),
+                        selected: png,
+                        onSelected: (_) => setLocal(() => png = true),
+                      ),
+                    ],
+                  ),
+                  if (!png) ...[
+                    const SizedBox(height: 12),
+                    Text('Qualité : ${quality.round()} %'),
+                    Slider(
+                      min: 40,
+                      max: 100,
+                      divisions: 60,
+                      value: quality,
+                      onChanged: (v) => setLocal(() => quality = v),
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  const Text('Taille'),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      for (final (label, side) in const [
+                        ('Originale', 0),
+                        ('Grande (2048)', 2048),
+                        ('Moyenne (1080)', 1080),
+                        ('Petite (720)', 720),
+                      ])
+                        ChoiceChip(
+                          label: Text(label),
+                          selected: maxSide == side,
+                          onSelected: (_) => setLocal(() => maxSide = side),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${size.width.round()} × ${size.height.round()} pixels',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton(
+                      onPressed: () => Navigator.pop(sheet, options),
+                      child: const Text('Enregistrer'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 
@@ -889,4 +1223,92 @@ class _CropPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_CropPainter old) => old.crop != crop;
+}
+
+/// Moves and selects texts by touch over its child.
+class _TextLayer extends StatelessWidget {
+  const _TextLayer({
+    required this.texts,
+    required this.selected,
+    required this.onSelect,
+    required this.onStart,
+    required this.onMove,
+    required this.onEnd,
+    required this.child,
+  });
+
+  final List<TextItem> texts;
+  final int selected;
+  final ValueChanged<int> onSelect;
+  final VoidCallback onStart;
+  final void Function(int index, Offset position) onMove;
+  final VoidCallback onEnd;
+  final Widget child;
+
+  int _nearest(Offset p) {
+    var best = -1;
+    var bestDistance = 0.14;
+    for (var i = 0; i < texts.length; i++) {
+      final d = (texts[i].position - p).distance;
+      if (d < bestDistance) {
+        best = i;
+        bestDistance = d;
+      }
+    }
+    return best;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, box) {
+        Offset norm(Offset p) => Offset(
+          (p.dx / box.maxWidth).clamp(0.0, 1.0),
+          (p.dy / box.maxHeight).clamp(0.0, 1.0),
+        );
+        int? dragging;
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapUp: (d) => onSelect(_nearest(norm(d.localPosition))),
+          onPanStart: (d) {
+            final i = _nearest(norm(d.localPosition));
+            if (i < 0) return;
+            dragging = i;
+            onSelect(i);
+            onStart();
+          },
+          onPanUpdate: (d) {
+            final i = dragging;
+            if (i != null) onMove(i, norm(d.localPosition));
+          },
+          onPanEnd: (_) {
+            if (dragging != null) onEnd();
+            dragging = null;
+          },
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              child,
+              // A ring marks the selected text.
+              if (selected >= 0 && selected < texts.length)
+                Positioned(
+                  left: texts[selected].position.dx * box.maxWidth - 24,
+                  top: texts[selected].position.dy * box.maxHeight - 24,
+                  width: 48,
+                  height: 48,
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white70, width: 1.5),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 }

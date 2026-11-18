@@ -184,6 +184,15 @@ void main() {
 
     // Save: a new file appears, the original stays byte for byte the same.
     await tester.tap(find.text('Enregistrer'));
+    await tester.pumpAndSettle();
+    // The options sheet first: keep the defaults (JPEG, original size).
+    expect(find.text("Options d'enregistrement"), findsOneWidget);
+    await tester.tap(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('Enregistrer'),
+      ),
+    );
     await settle();
     expect(find.text('Ouvrir'), findsOneWidget); // back on the first screen
     final saved = Directory(out).listSync().whereType<File>().toList();

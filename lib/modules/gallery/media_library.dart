@@ -35,6 +35,34 @@ class Media {
   /// Unique across photos and videos, whose ids overlap.
   String get key => '${video ? 'v' : 'i'}$id';
 
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'video': video,
+    'path': path,
+    'name': name,
+    'date': date.millisecondsSinceEpoch,
+    'uri': uri,
+    'size': size,
+    'width': width,
+    'height': height,
+    'album': album,
+    'duration': duration.inMilliseconds,
+  };
+
+  static Media fromJson(Map<String, dynamic> j) => Media(
+    id: j['id'] as int,
+    video: j['video'] as bool,
+    path: j['path'] as String,
+    name: j['name'] as String,
+    date: DateTime.fromMillisecondsSinceEpoch(j['date'] as int),
+    uri: j['uri'] as String,
+    size: (j['size'] as int?) ?? 0,
+    width: (j['width'] as int?) ?? 0,
+    height: (j['height'] as int?) ?? 0,
+    album: (j['album'] as String?) ?? '',
+    duration: Duration(milliseconds: (j['duration'] as int?) ?? 0),
+  );
+
   static Media fromMap(Map<Object?, Object?> m) => Media(
     id: (m['id'] as num).toInt(),
     video: m['video'] == true,

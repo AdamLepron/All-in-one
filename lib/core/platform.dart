@@ -282,6 +282,9 @@ class MediaChannel {
   static Future<void> setVolume(double value) =>
       _quiet('setVolume', {'value': value});
 
+  /// Blocks screenshots and previews of the app while [on].
+  static Future<void> secure(bool on) => _quiet('secure', {'on': on});
+
   static Future<void> keepScreenOn(bool on) =>
       _quiet('keepScreenOn', {'on': on});
 

@@ -140,7 +140,12 @@ void main() {
       'endMs': 9000,
       'speed': 1.5,
       'rotation': 90,
+      'volume': 1.0,
+      'fadeInMs': 0,
+      'fadeOutMs': 0,
     });
+    expect(args['titles'], isEmpty);
+    expect(args['musicVolume'], 1.0);
   });
 
   test('clock format', () {

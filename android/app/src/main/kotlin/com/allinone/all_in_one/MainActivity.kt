@@ -250,6 +250,15 @@ class MainActivity : AudioServiceActivity() {
                 pipHeight = call.argument<Number>("h")?.toInt() ?: 9
                 result.success(enterPip())
             }
+            "secure" -> {
+                // Hides the window from screenshots and the recent-apps view.
+                if (call.argument<Boolean>("on") == true) {
+                    window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                } else {
+                    window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                }
+                result.success(null)
+            }
             "keepScreenOn" -> {
                 if (call.argument<Boolean>("on") == true) {
                     window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)

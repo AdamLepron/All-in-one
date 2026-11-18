@@ -86,12 +86,33 @@ ColorMatrix fadeMatrix(double amount) {
   ];
 }
 
+/// [amount] from -1 to 1: darkens or lightens by up to about 1.5 stops.
+ColorMatrix exposureMatrix(double amount) {
+  final g = math.pow(2, amount * 1.5).toDouble();
+  return [
+    g, 0, 0, 0, 0, //
+    0, g, 0, 0, 0,
+    0, 0, g, 0, 0,
+    0, 0, 0, 1, 0,
+  ];
+}
+
+/// [amount] from -1 (greener) to 1 (more magenta).
+ColorMatrix tintMatrix(double amount) => [
+  1 + amount * 0.06, 0, 0, 0, 0, //
+  0, 1 - amount * 0.12, 0, 0, 0,
+  0, 0, 1 + amount * 0.06, 0, 0,
+  0, 0, 0, 1, 0,
+];
+
 /// The sliders of the Adjust tab.
 enum Adjust {
+  exposure('Exposition', -100, 100),
   brightness('Luminosité', -100, 100),
   contrast('Contraste', -100, 100),
   saturation('Saturation', -100, 100),
   warmth('Chaleur', -100, 100),
+  tint('Teinte', -100, 100),
   fade('Fondu', 0, 100),
   vignette('Vignette', 0, 100);
 
@@ -192,6 +213,60 @@ class Stroke {
       Stroke(color, width, [for (final p in points) f(p)]);
 }
 
+/// A piece of text laid over the photo. [position] is the centre of the
+/// text in the oriented image (0 to 1 on both axes); [size] is the text
+/// height as a fraction of the image's shorter side.
+class TextItem {
+  const TextItem(
+    this.text, {
+    this.position = const Offset(0.5, 0.5),
+    this.size = 0.07,
+    this.color = 0xFFFFFFFF,
+    this.bold = true,
+    this.background = false,
+  });
+
+  final String text;
+  final Offset position;
+  final double size;
+  final int color;
+  final bool bold;
+
+  /// Dark rounded box behind the text, for legibility.
+  final bool background;
+
+  TextItem copyWith({
+    String? text,
+    Offset? position,
+    double? size,
+    int? color,
+    bool? bold,
+    bool? background,
+  }) => TextItem(
+    text ?? this.text,
+    position: position ?? this.position,
+    size: size ?? this.size,
+    color: color ?? this.color,
+    bold: bold ?? this.bold,
+    background: background ?? this.background,
+  );
+
+  TextItem mapped(Offset Function(Offset) f) => copyWith(position: f(position));
+}
+
+/// Largest straightening, in degrees either way.
+const maxStraighten = 45.0;
+
+/// Zoom that keeps a frame of [width] × [height] fully covered by the photo
+/// once the photo is turned by [degrees] around its centre: without it the
+/// corners would show blank space.
+double straightenScale(double width, double height, double degrees) {
+  final a = degrees.abs() * math.pi / 180;
+  if (a == 0 || width <= 0 || height <= 0) return 1;
+  final long = math.max(width, height), short = math.min(width, height);
+  return math.cos(a) + math.sin(a) * long / short;
+}
+
 /// Every edit made to a photo, kept apart from the image itself so that
 /// nothing is ever destructive and any step can be undone.
 class EditState {
@@ -203,7 +278,14 @@ class EditState {
     this.filter = 'none',
     this.intensity = 1,
     this.strokes = const [],
+    this.straighten = 0,
+    this.texts = const [],
   });
+
+  /// Fine rotation in degrees (positive is clockwise), applied to the
+  /// oriented picture; the picture is zoomed just enough to hide the corners.
+  final double straighten;
+  final List<TextItem> texts;
 
   /// Clockwise quarter turns, 0–3, applied after [flipped].
   final int quarterTurns;
@@ -226,7 +308,9 @@ class EditState {
       !isCropped &&
       adjust.values.every((v) => v == 0) &&
       filter == 'none' &&
-      strokes.isEmpty;
+      strokes.isEmpty &&
+      straighten == 0 &&
+      texts.isEmpty;
 
   EditState copyWith({
     int? quarterTurns,
@@ -236,6 +320,8 @@ class EditState {
     String? filter,
     double? intensity,
     List<Stroke>? strokes,
+    double? straighten,
+    List<TextItem>? texts,
   }) => EditState(
     quarterTurns: quarterTurns ?? this.quarterTurns,
     flipped: flipped ?? this.flipped,
@@ -244,6 +330,8 @@ class EditState {
     filter: filter ?? this.filter,
     intensity: intensity ?? this.intensity,
     strokes: strokes ?? this.strokes,
+    straighten: straighten ?? this.straighten,
+    texts: texts ?? this.texts,
   );
 
   EditState withAdjust(Adjust a, double v) =>
@@ -254,6 +342,7 @@ class EditState {
     quarterTurns: (quarterTurns + 1) % 4,
     crop: Rect.fromLTRB(1 - crop.bottom, crop.left, 1 - crop.top, crop.right),
     strokes: [for (final s in strokes) s.mapped((p) => Offset(1 - p.dy, p.dx))],
+    texts: [for (final t in texts) t.mapped((p) => Offset(1 - p.dy, p.dx))],
   );
 
   /// Rotates 90° counter-clockwise.
@@ -267,20 +356,26 @@ class EditState {
     flipped: !flipped,
     crop: Rect.fromLTRB(1 - crop.right, crop.top, 1 - crop.left, crop.bottom),
     strokes: [for (final s in strokes) s.mapped((p) => Offset(1 - p.dx, p.dy))],
+    texts: [for (final t in texts) t.mapped((p) => Offset(1 - p.dx, p.dy))],
+    straighten: -straighten,
   );
 
   /// Colour matrix of filter and adjustments, applied to the pixels.
   ColorMatrix get matrix {
     var m = identityMatrix;
+    final e = value(Adjust.exposure) / 100;
+    final t = value(Adjust.tint) / 100;
     final b = value(Adjust.brightness) / 100;
     final c = value(Adjust.contrast) / 100;
     final s = value(Adjust.saturation) / 100;
     final w = value(Adjust.warmth) / 100;
     final f = value(Adjust.fade) / 100;
+    if (e != 0) m = compose(m, exposureMatrix(e));
     if (b != 0) m = compose(m, brightnessMatrix(b));
     if (c != 0) m = compose(m, contrastMatrix(c));
     if (s != 0) m = compose(m, saturationMatrix(s));
     if (w != 0) m = compose(m, warmthMatrix(w));
+    if (t != 0) m = compose(m, tintMatrix(t));
     if (f != 0) m = compose(m, fadeMatrix(f));
     if (filter != 'none') {
       m = compose(m, blendWithIdentity(filterById(filter).matrix, intensity));

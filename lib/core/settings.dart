@@ -191,6 +191,96 @@ class AppSettings extends ChangeNotifier {
         p,
   ]);
 
+  // Gallery albums made by the user: [{"id": 1, "name": "...", "keys": ["i12"]}].
+  List<UserAlbum> get mediaAlbums {
+    final raw = _prefs.getString('mediaAlbums');
+    if (raw == null) return const [];
+    try {
+      return [
+        for (final m in jsonDecode(raw) as List)
+          UserAlbum(
+            id: (m as Map)['id'] as int,
+            name: m['name'] as String,
+            keys: [for (final k in m['keys'] as List) k as String],
+          ),
+      ];
+    } on Object {
+      return const [];
+    }
+  }
+
+  void _saveMediaAlbums(List<UserAlbum> list) => _set(
+    () => _prefs.setString(
+      'mediaAlbums',
+      jsonEncode([
+        for (final a in list) {'id': a.id, 'name': a.name, 'keys': a.keys},
+      ]),
+    ),
+  );
+
+  UserAlbum createMediaAlbum(String name, {List<String> keys = const []}) {
+    final list = mediaAlbums;
+    final id = list.fold<int>(0, (m, a) => a.id > m ? a.id : m) + 1;
+    final album = UserAlbum(
+      id: id,
+      name: name.trim().isEmpty ? 'Album $id' : name.trim(),
+      keys: [...keys],
+    );
+    _saveMediaAlbums([...list, album]);
+    return album;
+  }
+
+  void renameMediaAlbum(int id, String name) {
+    if (name.trim().isEmpty) return;
+    _saveMediaAlbums([
+      for (final a in mediaAlbums)
+        if (a.id == id)
+          UserAlbum(id: a.id, name: name.trim(), keys: a.keys)
+        else
+          a,
+    ]);
+  }
+
+  void deleteMediaAlbum(int id) => _saveMediaAlbums([
+    for (final a in mediaAlbums)
+      if (a.id != id) a,
+  ]);
+
+  /// Adds [keys] to the album, skipping those already in it.
+  void addToMediaAlbum(int id, Iterable<String> keys) => _saveMediaAlbums([
+    for (final a in mediaAlbums)
+      if (a.id == id)
+        UserAlbum(
+          id: a.id,
+          name: a.name,
+          keys: [
+            ...a.keys,
+            for (final k in keys)
+              if (!a.keys.contains(k)) k,
+          ],
+        )
+      else
+        a,
+  ]);
+
+  void removeFromMediaAlbum(int id, Iterable<String> keys) {
+    final gone = keys.toSet();
+    _saveMediaAlbums([
+      for (final a in mediaAlbums)
+        if (a.id == id)
+          UserAlbum(
+            id: a.id,
+            name: a.name,
+            keys: [
+              for (final k in a.keys)
+                if (!gone.contains(k)) k,
+            ],
+          )
+        else
+          a,
+    ]);
+  }
+
   int get musicSort => (_prefs.getInt('musicSort') ?? 0).clamp(0, 2);
   set musicSort(int v) => _set(() => _prefs.setInt('musicSort', v));
 
@@ -336,4 +426,13 @@ class Playlist {
     name: name ?? this.name,
     songIds: songIds ?? this.songIds,
   );
+}
+
+/// A gallery album made by the user: it holds media keys, so the photos
+/// themselves stay where they are.
+class UserAlbum {
+  const UserAlbum({required this.id, required this.name, required this.keys});
+  final int id;
+  final String name;
+  final List<String> keys;
 }

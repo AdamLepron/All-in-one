@@ -64,6 +64,8 @@ void renderEdit(
   canvas
     ..save()
     ..translate(o.width / 2, o.height / 2)
+    ..rotate(s.straighten * math.pi / 180)
+    ..scale(straightenScale(o.width, o.height, s.straighten))
     ..rotate(s.quarterTurns * math.pi / 2);
   if (s.flipped) canvas.scale(-1, 1);
   canvas.translate(-image.width / 2, -image.height / 2);
@@ -107,6 +109,44 @@ void renderEdit(
     }
   }
 
+  // Text, in oriented coordinates.
+  for (final t in s.texts) {
+    if (t.text.trim().isEmpty) continue;
+    final painter = TextPainter(
+      text: TextSpan(
+        text: t.text,
+        style: TextStyle(
+          color: Color(t.color),
+          fontSize: math.max(4, t.size * side),
+          fontWeight: t.bold ? FontWeight.w800 : FontWeight.w500,
+          height: 1.1,
+          shadows: t.background
+              ? null
+              : const [Shadow(color: Color(0x99000000), blurRadius: 4)],
+        ),
+      ),
+      textAlign: TextAlign.center,
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: o.width * 0.9);
+    final at = Offset(t.position.dx * o.width, t.position.dy * o.height);
+    final box = Rect.fromCenter(
+      center: at,
+      width: painter.width,
+      height: painter.height,
+    );
+    if (t.background) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          box.inflate(t.size * side * 0.25),
+          Radius.circular(t.size * side * 0.3),
+        ),
+        Paint()..color = const Color(0xB3000000),
+      );
+    }
+    painter.paint(canvas, box.topLeft);
+    painter.dispose();
+  }
+
   // Vignette darkens the edges of the visible frame.
   final vignette = s.value(Adjust.vignette) / 100;
   if (vignette > 0) {
@@ -147,11 +187,18 @@ class EditPainter extends CustomPainter {
 }
 
 class EncodeJob {
-  EncodeJob(this.width, this.height, this.rgba, this.quality);
+  EncodeJob(
+    this.width,
+    this.height,
+    this.rgba,
+    this.quality, {
+    this.png = false,
+  });
   final int width;
   final int height;
   final TransferableTypedData rgba;
   final int quality;
+  final bool png;
 }
 
 Uint8List _encode(EncodeJob job) {
@@ -163,7 +210,36 @@ Uint8List _encode(EncodeJob job) {
     numChannels: 4,
     order: img.ChannelOrder.rgba,
   );
-  return img.encodeJpg(image, quality: job.quality);
+  return job.png
+      ? img.encodePng(image)
+      : img.encodeJpg(image, quality: job.quality);
+}
+
+/// How a finished photo is written.
+class ExportOptions {
+  const ExportOptions({this.png = false, this.quality = 92, this.maxSide = 0});
+
+  /// PNG keeps every pixel exactly; JPEG is much smaller.
+  final bool png;
+
+  /// JPEG quality, 40–100.
+  final int quality;
+
+  /// Longest side in pixels; 0 keeps the photo's own size.
+  final int maxSide;
+
+  String get extension => png ? 'png' : 'jpg';
+
+  /// Size of the file's picture for a result of [size] pixels.
+  Size scaled(Size size) {
+    final longest = math.max(size.width, size.height);
+    if (maxSide <= 0 || longest <= maxSide) return size;
+    final k = maxSide / longest;
+    return Size(
+      math.max(1, (size.width * k).roundToDouble()),
+      math.max(1, (size.height * k).roundToDouble()),
+    );
+  }
 }
 
 /// Renders [source] with [state] and returns it as JPEG bytes. Drawing runs
@@ -173,12 +249,21 @@ Future<Uint8List> exportJpeg(
   ui.Image source,
   EditState state, {
   int quality = 92,
-}) async {
-  final out = outputSize(source, state);
+}) => exportImage(source, state, ExportOptions(quality: quality));
+
+/// Like [exportJpeg], with the choice of format and size.
+Future<Uint8List> exportImage(
+  ui.Image source,
+  EditState state,
+  ExportOptions options,
+) async {
+  final natural = outputSize(source, state);
+  final out = options.scaled(natural);
   final recorder = ui.PictureRecorder();
   final canvas = Canvas(recorder);
-  // JPEG has no transparency: paint on white.
+  // Neither format here keeps transparency in this editor: paint on white.
   canvas.drawRect(Offset.zero & out, Paint()..color = const Color(0xFFFFFFFF));
+  canvas.scale(out.width / natural.width, out.height / natural.height);
   renderEdit(canvas, source, state);
   final picture = recorder.endRecording();
   final rendered = await picture.toImage(out.width.round(), out.height.round());
@@ -189,7 +274,8 @@ Future<Uint8List> exportJpeg(
       rendered.width,
       rendered.height,
       TransferableTypedData.fromList([data!.buffer.asUint8List()]),
-      quality,
+      options.quality.clamp(40, 100),
+      png: options.png,
     );
     return await Isolate.run(() => _encode(job));
   } finally {
@@ -207,18 +293,20 @@ Future<String> saveEditedCopy(
   String path,
   EditState state, {
   required String dir,
+  ExportOptions options = const ExportOptions(),
 }) async {
   final source = await loadPhoto(path, maxSide: 4096);
   try {
-    final bytes = await exportJpeg(source, state);
+    final bytes = await exportImage(source, state, options);
     await Directory(dir).create(recursive: true);
     final now = DateTime.now();
     String two(int n) => n.toString().padLeft(2, '0');
     final stamp =
         '${now.year}${two(now.month)}${two(now.day)}_${two(now.hour)}${two(now.minute)}${two(now.second)}';
-    var target = '$dir/IMG_$stamp.jpg';
+    final ext = options.extension;
+    var target = '$dir/IMG_$stamp.$ext';
     for (var i = 1; File(target).existsSync(); i++) {
-      target = '$dir/IMG_${stamp}_$i.jpg';
+      target = '$dir/IMG_${stamp}_$i.$ext';
     }
     await File(target).writeAsBytes(bytes);
     return target;
