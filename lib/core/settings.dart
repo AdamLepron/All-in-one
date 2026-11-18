@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -113,6 +115,81 @@ class AppSettings extends ChangeNotifier {
       ]),
     );
   }
+
+  // Playlists, stored as JSON: [{"id": 1, "name": "...", "songs": [ids]}].
+  List<Playlist> get playlists {
+    final raw = _prefs.getString('playlists');
+    if (raw == null) return const [];
+    try {
+      return [
+        for (final m in jsonDecode(raw) as List)
+          Playlist(
+            id: (m as Map)['id'] as int,
+            name: m['name'] as String,
+            songIds: [for (final i in m['songs'] as List) i as int],
+          ),
+      ];
+    } on Object {
+      return const [];
+    }
+  }
+
+  void _savePlaylists(List<Playlist> list) => _set(
+    () => _prefs.setString(
+      'playlists',
+      jsonEncode([
+        for (final p in list) {'id': p.id, 'name': p.name, 'songs': p.songIds},
+      ]),
+    ),
+  );
+
+  /// Creates a playlist, optionally starting with [songId]; returns it.
+  Playlist createPlaylist(String name, {int? songId}) {
+    final list = playlists;
+    final id = list.fold<int>(0, (m, p) => p.id > m ? p.id : m) + 1;
+    final playlist = Playlist(
+      id: id,
+      name: name.trim().isEmpty ? 'Playlist $id' : name.trim(),
+      songIds: [?songId],
+    );
+    _savePlaylists([...list, playlist]);
+    return playlist;
+  }
+
+  void renamePlaylist(int id, String name) {
+    if (name.trim().isEmpty) return;
+    _savePlaylists([
+      for (final p in playlists)
+        if (p.id == id) p.copyWith(name: name.trim()) else p,
+    ]);
+  }
+
+  void deletePlaylist(int id) => _savePlaylists([
+    for (final p in playlists)
+      if (p.id != id) p,
+  ]);
+
+  /// Adds [songId] unless the playlist already holds it.
+  void addToPlaylist(int id, int songId) => _savePlaylists([
+    for (final p in playlists)
+      if (p.id == id && !p.songIds.contains(songId))
+        p.copyWith(songIds: [...p.songIds, songId])
+      else
+        p,
+  ]);
+
+  void removeFromPlaylist(int id, int songId) => _savePlaylists([
+    for (final p in playlists)
+      if (p.id == id)
+        p.copyWith(
+          songIds: [
+            for (final s in p.songIds)
+              if (s != songId) s,
+          ],
+        )
+      else
+        p,
+  ]);
 
   int get musicSort => (_prefs.getInt('musicSort') ?? 0).clamp(0, 2);
   set musicSort(int v) => _set(() => _prefs.setInt('musicSort', v));
@@ -245,4 +322,18 @@ class AppSettings extends ChangeNotifier {
     write();
     notifyListeners();
   }
+}
+
+/// A user playlist: an ordered list of song ids.
+class Playlist {
+  const Playlist({required this.id, required this.name, required this.songIds});
+  final int id;
+  final String name;
+  final List<int> songIds;
+
+  Playlist copyWith({String? name, List<int>? songIds}) => Playlist(
+    id: id,
+    name: name ?? this.name,
+    songIds: songIds ?? this.songIds,
+  );
 }

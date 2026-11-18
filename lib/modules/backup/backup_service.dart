@@ -49,7 +49,7 @@ class BackupService {
     required this.settings,
     required this.scansDir,
     required this.recordingsDir,
-    this.appVersion = '1.1.0',
+    this.appVersion = '1.2.0',
   });
 
   final NotesStore notes;

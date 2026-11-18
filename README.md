@@ -18,6 +18,7 @@ documents, notes, fichiers et utilitaires. Développée avec Flutter.
 | 9 — Transfert et documents | Transfert local (envoi et réception par Wi-Fi via un lien et un QR code, sans application sur l'autre appareil), éditeur de documents texte et Markdown (barre de mise en forme, aperçu, enregistrement automatique, export PDF) | Livrée (0.9.0) |
 | 10 — Éditeur vidéo | Montage : découpe, assemblage de plusieurs vidéos, vitesse de 0,25× à 4×, rotation, son d'origine coupé ou remplacé par une musique, export MP4 (H.264) avec progression | Livrée (1.0.0) |
 | 11 — Fiabilité et socle | Journal des incidents, grosses bibliothèques fluides, réception de fichiers/texte depuis les autres apps (Partager / Ouvrir avec), recherche universelle étendue (documents, fichiers, scans, rappels…), sauvegarde et restauration complètes, accessibilité (lecteur d'écran, texte agrandi) | Livrée (1.1.0) |
+| 12 — Écouter et regarder (partie musique) | Playlists (création, ajout depuis le menu ⋮, renommer, supprimer), file d'attente réordonnable par glisser, minuterie de sommeil | Livrée (1.2.0) |
 
 Les 21 modules du cahier des charges sont désormais disponibles ; leurs fonctions les plus avancées (pistes multiples, transitions, titres animés, tableur, présentations) restent à venir.
 

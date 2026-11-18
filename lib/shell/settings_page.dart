@@ -127,7 +127,7 @@ class SettingsPage extends StatelessWidget {
           const ListTile(
             leading: Icon(Icons.info_outline),
             title: Text('All-in-One'),
-            subtitle: Text('Version 1.1.0 · Fiabilité et socle'),
+            subtitle: Text('Version 1.2.0 · Écouter et regarder'),
           ),
         ],
       ),

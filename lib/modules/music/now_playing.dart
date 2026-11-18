@@ -132,6 +132,21 @@ class _NowPlayingState extends State<NowPlaying> {
                       ),
                     ),
                   ),
+                  ValueListenableBuilder<DateTime?>(
+                    valueListenable: context.read<MusicController>().sleepAt,
+                    builder: (context, at, _) => IconButton(
+                      tooltip: at == null
+                          ? 'Minuterie de sommeil'
+                          : 'Minuterie active',
+                      icon: Icon(
+                        at == null
+                            ? Icons.bedtime_outlined
+                            : Icons.bedtime_rounded,
+                      ),
+                      color: white,
+                      onPressed: () => _showSleepTimer(context),
+                    ),
+                  ),
                   IconButton(
                     tooltip: "File d'attente",
                     icon: const Icon(Icons.queue_music_rounded),
@@ -336,55 +351,124 @@ class _NowPlayingState extends State<NowPlaying> {
           final music = context.watch<MusicController>();
           final order = music.upcoming;
           final scheme = Theme.of(context).colorScheme;
-          return ListView.builder(
-            controller: scroll,
-            itemCount: order.length + 1,
-            itemBuilder: (_, row) {
-              if (row == 0) {
-                return ListTile(
-                  title: Text(
-                    "File d'attente",
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  subtitle: Text(
-                    '${order.length} titre${order.length > 1 ? 's' : ''}${music.shuffle ? ' · aléatoire' : ''}',
-                  ),
-                );
-              }
-              final index = order[row - 1];
-              final song = music.queue[index];
-              final isCurrent = index == music.currentIndex;
-              final tile = ListTile(
-                leading: Artwork(song, size: 44),
+          final canMove = !music.shuffle;
+          Widget row(int position) {
+            final index = order[position];
+            final song = music.queue[index];
+            final isCurrent = index == music.currentIndex;
+            final tile = ListTile(
+              key: ValueKey('queue-$position-${song.id}'),
+              leading: Artwork(song, size: 44),
+              title: Text(
+                song.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontWeight: isCurrent ? FontWeight.w800 : null,
+                  color: isCurrent ? scheme.primary : null,
+                ),
+              ),
+              subtitle: Text(
+                song.artist,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              trailing: isCurrent
+                  ? Icon(Icons.graphic_eq_rounded, color: scheme.primary)
+                  : canMove
+                  ? ReorderableDragStartListener(
+                      index: position,
+                      child: const SizedBox(
+                        width: 48,
+                        height: 48,
+                        child: Icon(Icons.drag_handle_rounded),
+                      ),
+                    )
+                  : null,
+              onTap: isCurrent ? null : () => music.jumpTo(index),
+            );
+            if (isCurrent) return tile;
+            return Dismissible(
+              key: ValueKey('queue-dismiss-$position-${song.id}'),
+              background: ColoredBox(color: scheme.errorContainer),
+              onDismissed: (_) => music.removeFromQueue(index),
+              child: tile,
+            );
+          }
+
+          return Column(
+            children: [
+              ListTile(
                 title: Text(
-                  song.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontWeight: isCurrent ? FontWeight.w800 : null,
-                    color: isCurrent ? scheme.primary : null,
-                  ),
+                  "File d'attente",
+                  style: Theme.of(context).textTheme.titleLarge,
                 ),
                 subtitle: Text(
-                  song.artist,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  '${order.length} titre${order.length > 1 ? 's' : ''}'
+                  '${music.shuffle ? ' · aléatoire' : ' · maintenez la poignée pour réordonner'}',
                 ),
-                trailing: isCurrent
-                    ? Icon(Icons.graphic_eq_rounded, color: scheme.primary)
-                    : null,
-                onTap: isCurrent ? null : () => music.jumpTo(index),
-              );
-              if (isCurrent) return tile;
-              return Dismissible(
-                key: ObjectKey(song),
-                background: ColoredBox(color: scheme.errorContainer),
-                onDismissed: (_) => music.removeFromQueue(index),
-                child: tile,
-              );
-            },
+              ),
+              Expanded(
+                child: ReorderableListView.builder(
+                  scrollController: scroll,
+                  buildDefaultDragHandles: false,
+                  itemCount: order.length,
+                  onReorderItem: (from, to) {
+                    if (!canMove) return;
+                    music.moveInQueue(order[from], order[to]);
+                  },
+                  itemBuilder: (_, position) => row(position),
+                ),
+              ),
+            ],
           );
         },
+      ),
+    );
+  }
+
+  void _showSleepTimer(BuildContext context) {
+    final music = context.read<MusicController>();
+    const choices = [
+      Duration(minutes: 15),
+      Duration(minutes: 30),
+      Duration(minutes: 45),
+      Duration(hours: 1),
+    ];
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (sheet) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(
+                'Minuterie de sommeil',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              subtitle: const Text('La musique s\'arrêtera après :'),
+            ),
+            for (final d in choices)
+              ListTile(
+                title: Text(
+                  d.inMinutes < 60 ? '${d.inMinutes} minutes' : '1 heure',
+                ),
+                onTap: () {
+                  Navigator.pop(sheet);
+                  music.setSleepTimer(d);
+                },
+              ),
+            if (music.sleepAt.value != null)
+              ListTile(
+                leading: const Icon(Icons.timer_off_outlined),
+                title: const Text('Désactiver la minuterie'),
+                onTap: () {
+                  Navigator.pop(sheet);
+                  music.setSleepTimer(null);
+                },
+              ),
+          ],
+        ),
       ),
     );
   }

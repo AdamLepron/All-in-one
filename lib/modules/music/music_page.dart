@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/settings.dart';
 import '../../core/util.dart';
+import '../files/files_ui.dart' show showMessage;
 import 'artwork.dart';
 import 'mini_player.dart';
 import 'music_controller.dart';
@@ -15,6 +16,7 @@ enum _Filter {
   songs('Titres'),
   albums('Albums'),
   artists('Artistes'),
+  playlists('Playlists'),
   favorites('Favoris'),
   recent('Récents');
 
@@ -165,6 +167,7 @@ class _MusicPageState extends State<MusicPage> {
               onSort: () => _showSort(settings),
             ),
             _Filter.albums => _AlbumGrid(music.albums),
+            _Filter.playlists => const _PlaylistList(),
             _Filter.artists => _ArtistList(music.artists),
             _Filter.favorites => SongList(
               songs: [
@@ -222,8 +225,11 @@ class SongList extends StatelessWidget {
     this.emptyText = '',
     this.header,
     this.showTrackNumbers = false,
+    this.onRemove,
   });
 
+  /// When set, each song's menu offers to remove it (from a playlist).
+  final void Function(Song song)? onRemove;
   final List<Song> songs;
   final String? sortLabel;
   final VoidCallback? onSort;
@@ -320,6 +326,7 @@ class SongList extends StatelessWidget {
         return SongTile(
           songs[i],
           trackNumber: showTrackNumbers ? i + 1 : null,
+          onRemove: onRemove,
           onTap: () => music.play(songs, i),
         );
       },
@@ -328,8 +335,15 @@ class SongList extends StatelessWidget {
 }
 
 class SongTile extends StatelessWidget {
-  const SongTile(this.song, {super.key, required this.onTap, this.trackNumber});
+  const SongTile(
+    this.song, {
+    super.key,
+    required this.onTap,
+    this.trackNumber,
+    this.onRemove,
+  });
   final Song song;
+  final void Function(Song song)? onRemove;
   final VoidCallback onTap;
   final int? trackNumber;
 
@@ -383,54 +397,74 @@ class SongTile extends StatelessWidget {
     showModalBottomSheet<void>(
       context: context,
       builder: (sheet) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: Artwork(song, size: 48),
-              title: Text(
-                song.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+        // Scrolls on short screens, where the longer menu no longer fits.
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: Artwork(song, size: 48),
+                title: Text(
+                  song.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: Text(
+                  '${song.artist} · ${song.album}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-              subtitle: Text(
-                '${song.artist} · ${song.album}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.playlist_play_rounded),
+                title: const Text('Lire ensuite'),
+                onTap: () {
+                  Navigator.pop(sheet);
+                  music.playNext(song);
+                },
               ),
-            ),
-            const Divider(height: 1),
-            ListTile(
-              leading: const Icon(Icons.playlist_play_rounded),
-              title: const Text('Lire ensuite'),
-              onTap: () {
-                Navigator.pop(sheet);
-                music.playNext(song);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.queue_music_rounded),
-              title: const Text("Ajouter à la file d'attente"),
-              onTap: () {
-                Navigator.pop(sheet);
-                music.addToQueue(song);
-              },
-            ),
-            ListTile(
-              leading: Icon(
-                favorite
-                    ? Icons.favorite_rounded
-                    : Icons.favorite_border_rounded,
+              ListTile(
+                leading: const Icon(Icons.queue_music_rounded),
+                title: const Text("Ajouter à la file d'attente"),
+                onTap: () {
+                  Navigator.pop(sheet);
+                  music.addToQueue(song);
+                },
               ),
-              title: Text(
-                favorite ? 'Retirer des favoris' : 'Ajouter aux favoris',
+              ListTile(
+                leading: const Icon(Icons.playlist_add_rounded),
+                title: const Text('Ajouter à une playlist'),
+                onTap: () {
+                  Navigator.pop(sheet);
+                  showAddToPlaylist(context, song);
+                },
               ),
-              onTap: () {
-                Navigator.pop(sheet);
-                settings.toggleFavorite(song.id);
-              },
-            ),
-          ],
+              if (onRemove != null)
+                ListTile(
+                  leading: const Icon(Icons.remove_circle_outline_rounded),
+                  title: const Text('Retirer de la playlist'),
+                  onTap: () {
+                    Navigator.pop(sheet);
+                    onRemove!(song);
+                  },
+                ),
+              ListTile(
+                leading: Icon(
+                  favorite
+                      ? Icons.favorite_rounded
+                      : Icons.favorite_border_rounded,
+                ),
+                title: Text(
+                  favorite ? 'Retirer des favoris' : 'Ajouter aux favoris',
+                ),
+                onTap: () {
+                  Navigator.pop(sheet);
+                  settings.toggleFavorite(song.id);
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -606,6 +640,176 @@ class _Message extends StatelessWidget {
             if (action != null) ...[const SizedBox(height: 20), action!],
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Asks for a text; null when cancelled.
+Future<String?> askName(
+  BuildContext context, {
+  required String title,
+  String initial = '',
+}) {
+  final controller = TextEditingController(text: initial);
+  return showDialog<String>(
+    context: context,
+    builder: (dialog) => AlertDialog(
+      title: Text(title),
+      content: TextField(
+        controller: controller,
+        autofocus: true,
+        textCapitalization: TextCapitalization.sentences,
+        decoration: const InputDecoration(labelText: 'Nom'),
+        onSubmitted: (v) => Navigator.pop(dialog, v),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialog),
+          child: const Text('Annuler'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(dialog, controller.text),
+          child: const Text('OK'),
+        ),
+      ],
+    ),
+  );
+}
+
+/// Bottom sheet to put [song] in an existing or a new playlist.
+void showAddToPlaylist(BuildContext context, Song song) {
+  final settings = context.read<AppSettings>();
+  showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    builder: (sheet) => SafeArea(
+      child: ListView(
+        shrinkWrap: true,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.add_rounded),
+            title: const Text('Nouvelle playlist'),
+            onTap: () async {
+              Navigator.pop(sheet);
+              final name = await askName(context, title: 'Nouvelle playlist');
+              if (name == null) return;
+              final p = settings.createPlaylist(name, songId: song.id);
+              if (context.mounted) {
+                showMessage(context, 'Ajouté à « ${p.name} »');
+              }
+            },
+          ),
+          for (final p in settings.playlists)
+            ListTile(
+              leading: const Icon(Icons.queue_music_rounded),
+              title: Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+              subtitle: Text(
+                '${p.songIds.length} titre${p.songIds.length > 1 ? 's' : ''}',
+              ),
+              onTap: () {
+                Navigator.pop(sheet);
+                settings.addToPlaylist(p.id, song.id);
+                showMessage(context, 'Ajouté à « ${p.name} »');
+              },
+            ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _PlaylistList extends StatelessWidget {
+  const _PlaylistList();
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = context.watch<AppSettings>();
+    final lists = settings.playlists;
+    return ListView(
+      children: [
+        ListTile(
+          leading: const CircleAvatar(child: Icon(Icons.add_rounded)),
+          title: const Text('Nouvelle playlist'),
+          onTap: () async {
+            final name = await askName(context, title: 'Nouvelle playlist');
+            if (name != null) settings.createPlaylist(name);
+          },
+        ),
+        for (final p in lists)
+          ListTile(
+            leading: const CircleAvatar(child: Icon(Icons.queue_music_rounded)),
+            title: Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+            subtitle: Text(
+              '${p.songIds.length} titre${p.songIds.length > 1 ? 's' : ''}',
+            ),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => PlaylistPage(id: p.id)),
+            ),
+          ),
+        if (lists.isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(32),
+            child: Text(
+              'Créez une playlist, puis ajoutez-y des titres depuis leur menu ⋮.',
+              textAlign: TextAlign.center,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// Songs of one playlist, with rename and delete.
+class PlaylistPage extends StatelessWidget {
+  const PlaylistPage({super.key, required this.id});
+  final int id;
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = context.watch<AppSettings>();
+    final music = context.watch<MusicController>();
+    final playlist = settings.playlists.where((p) => p.id == id).firstOrNull;
+    if (playlist == null) return const Scaffold(body: SizedBox.shrink());
+    final byId = {for (final s in music.songs) s.id: s};
+    final songs = [
+      for (final sid in playlist.songIds)
+        if (byId[sid] != null) byId[sid]!,
+    ];
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(playlist.name),
+        actions: [
+          PopupMenuButton<String>(
+            tooltip: 'Options',
+            onSelected: (v) async {
+              if (v == 'rename') {
+                final name = await askName(
+                  context,
+                  title: 'Renommer',
+                  initial: playlist.name,
+                );
+                if (name != null) settings.renamePlaylist(id, name);
+              } else {
+                settings.deletePlaylist(id);
+                if (context.mounted) Navigator.pop(context);
+              }
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'rename', child: Text('Renommer')),
+              PopupMenuItem(
+                value: 'delete',
+                child: Text('Supprimer la playlist'),
+              ),
+            ],
+          ),
+        ],
+      ),
+      bottomNavigationBar: const SafeArea(child: MiniPlayer()),
+      body: SongList(
+        songs: songs,
+        emptyText: 'Playlist vide. Ajoutez des titres depuis leur menu ⋮.',
+        onRemove: (s) => settings.removeFromPlaylist(id, s.id),
       ),
     );
   }

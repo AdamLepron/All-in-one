@@ -294,6 +294,52 @@ class MusicController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Moves a song inside the queue (queue positions, not display rows).
+  Future<void> moveInQueue(int from, int to) async {
+    final i = _index;
+    if (_player == null ||
+        i == null ||
+        from == to ||
+        from < 0 ||
+        to < 0 ||
+        from >= queue.length ||
+        to >= queue.length) {
+      return;
+    }
+    queue.insert(to, queue.removeAt(from));
+    if (i == from) {
+      _index = to;
+    } else if (from < i && to >= i) {
+      _index = i - 1;
+    } else if (from > i && to <= i) {
+      _index = i + 1;
+    }
+    notifyListeners();
+    await _player!.moveAudioSource(from, to);
+  }
+
+  // ---- Sleep timer ----
+
+  Timer? _sleepTimer;
+
+  /// When the music will stop, or null.
+  final sleepAt = ValueNotifier<DateTime?>(null);
+
+  /// Stops playback after [after]; null cancels the timer.
+  void setSleepTimer(Duration? after) {
+    _sleepTimer?.cancel();
+    _sleepTimer = null;
+    if (after == null) {
+      sleepAt.value = null;
+      return;
+    }
+    sleepAt.value = DateTime.now().add(after);
+    _sleepTimer = Timer(after, () {
+      sleepAt.value = null;
+      pause();
+    });
+  }
+
   Future<void> removeFromQueue(int queueIndex) async {
     final i = _index;
     if (_player == null || i == null || queueIndex == i) return;
@@ -305,6 +351,8 @@ class MusicController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _sleepTimer?.cancel();
+    sleepAt.dispose();
     for (final s in _subscriptions) {
       s.cancel();
     }
