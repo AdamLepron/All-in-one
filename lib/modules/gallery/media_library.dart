@@ -98,12 +98,15 @@ class MediaLibrary extends ChangeNotifier {
   set items(List<Media> value) {
     _items = value;
     _videos = null;
+    _images = null;
     _albums = null;
   }
 
   List<Media>? _videos;
+  List<Media>? _images;
   List<MediaAlbum>? _albums;
 
+  List<Media> get images => _images ??= _items.where((m) => !m.video).toList();
   List<Media> get videos => _videos ??= _items.where((m) => m.video).toList();
 
   /// Albums ordered by their most recent item.

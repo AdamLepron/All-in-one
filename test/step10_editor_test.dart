@@ -134,7 +134,7 @@ void main() {
     await shot(tester, '56_video_editor');
 
     // Trim to 10 s – 40 s.
-    tester.widget<RangeSlider>(find.byType(RangeSlider)).onChanged!(
+    tester.widget<RangeSlider>(find.byType(RangeSlider).first).onChanged!(
       const RangeValues(10000, 40000),
     );
     await tester.pump();
@@ -154,7 +154,9 @@ void main() {
     await tester.pump();
 
     // A second video joins the montage and becomes the selected clip.
-    await tester.tap(find.byTooltip('Ajouter une vidéo'));
+    await tester.tap(find.byTooltip('Ajouter un extrait'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ajouter une vidéo'));
     await tester.pumpAndSettle();
     await tester.tap(
       find

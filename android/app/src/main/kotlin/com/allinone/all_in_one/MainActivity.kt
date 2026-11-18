@@ -195,6 +195,7 @@ class MainActivity : AudioServiceActivity() {
                 video.export(call.arguments as Map<String, Any?>, result)
             }
             "exportProgress" -> result.success(video.progress())
+            "exportWarning" -> result.success(video.takeWarning())
             "cancelExport" -> {
                 video.cancel()
                 result.success(null)

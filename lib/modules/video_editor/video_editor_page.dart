@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
 import 'package:file_picker/file_picker.dart';
+import 'package:just_audio/just_audio.dart' show AudioPlayer;
+import 'package:record/record.dart';
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as p;
@@ -22,6 +25,8 @@ import 'project_store.dart';
 import 'video_project.dart';
 
 /// Runs an export and returns the file path. [onProgress] receives 0–100.
+part 'video_editor_tracks.dart';
+
 typedef VideoExporterFn = Future<String> Function(
   Map<String, Object?> args,
   void Function(int percent) onProgress,
@@ -55,10 +60,11 @@ enum _Tab {
   speed('Vitesse', Icons.speed_rounded),
   audio('Audio', Icons.music_note_rounded),
   titles('Titres', Icons.title_rounded),
+  layers('Calques', Icons.layers_rounded),
   filters('Filtres', Icons.auto_awesome_rounded),
   effects('Effets', Icons.blur_on_rounded),
   format('Format', Icons.crop_rounded),
-  fades('Fondus', Icons.gradient_rounded);
+  transitions('Transitions', Icons.swap_horiz_rounded);
 
   const _Tab(this.label, this.icon);
   final String label;
@@ -104,6 +110,19 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
   _Tab _tab = _Tab.trim;
   bool _dirty = false;
 
+  /// Time in the selected clip (in the finished video), for live layers.
+  final ValueNotifier<int> _pos = ValueNotifier(0);
+  int _selOverlay = -1;
+  int _selSound = -1;
+  int _cutFrom = -1;
+  int _cutTo = -1;
+  AudioRecorder? _recorder;
+  int _voiceFrom = 0;
+  final Stopwatch _voiceClock = Stopwatch();
+
+  /// Rebuilds after a change that is not an edit of the montage.
+  void _ui(VoidCallback change) => setState(change);
+
   VideoPlayerController? _player;
   int _playerFor = -1;
   bool _previewFailed = false;
@@ -125,6 +144,8 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
     // Whatever was done since the last save is kept.
     if (_dirty) _saveQuietly();
     _player?.dispose();
+    _recorder?.dispose();
+    _pos.dispose();
     super.dispose();
   }
 
@@ -135,12 +156,17 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
     _playerFor = index;
     final old = _player;
     _player = null;
+    _pos.value = 0;
+    _cutFrom = -1;
+    _cutTo = -1;
     setState(() => _previewFailed = false);
     try {
       await old?.dispose();
     } on Object {
       // Already released.
     }
+    // A picture has nothing to play: it is shown as it is.
+    if (clip.isImage) return;
     VideoPlayerController? controller;
     try {
       controller = clip.media.uri.startsWith('content:')
@@ -177,6 +203,10 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
     if (c.value.position.inMilliseconds >= clip.endMs) {
       c.seekTo(Duration(milliseconds: clip.startMs));
     }
+    final out = ((c.value.position.inMilliseconds - clip.startMs) / clip.speed)
+        .round()
+        .clamp(0, clip.outputMs);
+    if (out != _pos.value) _pos.value = out;
   }
 
   /// Saving the montage must never get in the way of editing or exporting.
@@ -205,46 +235,30 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
   // ---- Clips ----
 
   Future<void> _addClip() async {
-    final library = context.read<MediaLibrary>();
-    final picked = await showModalBottomSheet<Media>(
+    // A video, or a photo shown for a few seconds.
+    final video = await showModalBottomSheet<bool>(
       context: context,
-      isScrollControlled: true,
-      builder: (sheet) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.7,
-        builder: (_, scroll) {
-          final videos = library.videos;
-          return Column(
-            children: [
-              ListTile(
-                title: Text(
-                  'Ajouter une vidéo',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-              ),
-              Expanded(
-                child: videos.isEmpty
-                    ? const Center(child: Text('Aucune vidéo trouvée'))
-                    : GridView.builder(
-                        controller: scroll,
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 3,
-                              mainAxisSpacing: 2,
-                              crossAxisSpacing: 2,
-                            ),
-                        itemCount: videos.length,
-                        itemBuilder: (_, i) => GestureDetector(
-                          onTap: () => Navigator.pop(sheet, videos[i]),
-                          child: MediaThumb(videos[i]),
-                        ),
-                      ),
-              ),
-            ],
-          );
-        },
+      builder: (sheet) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.videocam_outlined),
+              title: const Text('Ajouter une vidéo'),
+              onTap: () => Navigator.pop(sheet, true),
+            ),
+            ListTile(
+              leading: const Icon(Icons.image_outlined),
+              title: const Text('Ajouter une photo'),
+              subtitle: const Text('Affichée quelques secondes'),
+              onTap: () => Navigator.pop(sheet, false),
+            ),
+          ],
+        ),
       ),
     );
+    if (video == null || !mounted) return;
+    final picked = await _pickMedia(video: video);
     if (picked == null) return;
     _edit(() {
       _project.clips.add(Clip(picked));
@@ -411,6 +425,13 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
     progress.dispose();
     if (!mounted) return;
 
+    String? warning;
+    if (saved != null &&
+        !cancelled &&
+        _project.overlays.any((o) => !o.isImage)) {
+      warning = await MediaChannel.exportWarning();
+    }
+    if (!mounted) return;
     if (saved != null && !cancelled) {
       unawaited(
         MediaChannel.rescan([saved]).then((_) => library.load(request: false)),
@@ -422,7 +443,11 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
         ..clearSnackBars()
         ..showSnackBar(
           SnackBar(
-            content: const Text('Vidéo enregistrée dans Films / All-in-One'),
+            content: Text(
+              warning == null
+                  ? 'Vidéo enregistrée dans Films / All-in-One'
+                  : 'Vidéo enregistrée. $warning',
+            ),
             duration: const Duration(seconds: 7),
             action: SnackBarAction(
               label: 'Partager',
@@ -536,13 +561,14 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
                   ),
                 ),
                 _strip(),
+                _timeline(),
                 // A Material, so list tiles inside can show their touch effect.
                 Material(
                   color: const Color(0xFF17171C),
                   child: Container(
                     constraints: const BoxConstraints(
-                      minHeight: 120,
-                      maxHeight: 270,
+                      minHeight: 110,
+                      maxHeight: 240,
                     ),
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     child: SingleChildScrollView(
@@ -554,7 +580,8 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
                         _Tab.filters => _filtersPanel(),
                         _Tab.effects => _effectsPanel(),
                         _Tab.format => _formatPanel(),
-                        _Tab.fades => _fadesPanel(),
+                        _Tab.layers => _layersPanel(),
+                        _Tab.transitions => _transitionsPanel(),
                       },
                     ),
                   ),
@@ -578,6 +605,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
         child: SizedBox(
           height: 64,
           child: ListView(
+            key: const ValueKey('tool-tabs'),
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 6),
             children: [
@@ -636,14 +664,12 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
     );
   }
 
-  /// The playing video with the clip's look, mirror, blur and the frame
-  /// shape of the montage, as close as the phone can show it live.
-  Widget _framedVideo(VideoPlayerController player) {
+  /// The picture of the selected clip with its look, mirror, blur, motion
+  /// and transitions, laid out in the frame of the montage with the live
+  /// layers (titles, stickers, overlaid pictures) on top.
+  Widget _framed(Widget source, double sourceAspect) {
     final c = _clip;
-    Widget video = AspectRatio(
-      aspectRatio: player.value.aspectRatio,
-      child: VideoPlayer(player),
-    );
+    Widget video = AspectRatio(aspectRatio: sourceAspect, child: source);
     final look = c.look;
     if (!look.isNeutral) {
       video = ColorFiltered(
@@ -664,19 +690,56 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
     video = RotatedBox(quarterTurns: c.rotation ~/ 90, child: video);
     if (c.flip) video = Transform.flip(flipX: true, child: video);
     final aspect = _project.aspect;
-    if (aspect == Aspect.original) return video;
     final size = c.orientedSize;
     final w = size.width <= 0 ? 16.0 : size.width;
     final h = size.height <= 0 ? 9.0 : size.height;
+    final ratio = aspect == Aspect.original ? w / h : aspect.ratio;
+    final index = _selected;
     return AspectRatio(
-      aspectRatio: aspect.ratio,
+      aspectRatio: ratio,
       child: ClipRect(
-        child: ColoredBox(
-          color: Colors.black,
-          child: FittedBox(
-            fit: _project.fillFrame ? BoxFit.cover : BoxFit.contain,
-            child: SizedBox(width: w, height: h, child: video),
-          ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            const ColoredBox(color: Colors.black),
+            // Motion, transitions and fades follow the playhead.
+            ValueListenableBuilder<int>(
+              valueListenable: _pos,
+              builder: (_, ms, child) {
+                final pose = _project.poseAt(index, ms);
+                if (pose.isNeutral) return child!;
+                return LayoutBuilder(
+                  builder: (_, box) => Transform(
+                    alignment: Alignment.center,
+                    transform: Matrix4.identity()
+                      ..translateByDouble(
+                        pose.dx * box.maxWidth / 2,
+                        -pose.dy * box.maxHeight / 2,
+                        0,
+                        1,
+                      )
+                      ..scaleByDouble(pose.scale, pose.scale, 1, 1),
+                    child: ColorFiltered(
+                      colorFilter: ColorFilter.matrix([
+                        pose.gain, 0, 0, 0, 0, //
+                        0, pose.gain, 0, 0, 0,
+                        0, 0, pose.gain, 0, 0,
+                        0, 0, 0, 1, 0,
+                      ]),
+                      child: child,
+                    ),
+                  ),
+                );
+              },
+              child: FittedBox(
+                fit: _project.fillFrame && aspect != Aspect.original
+                    ? BoxFit.cover
+                    : BoxFit.contain,
+                child: SizedBox(width: w, height: h, child: video),
+              ),
+            ),
+            _layersOnPreview(),
+          ],
         ),
       ),
     );
@@ -684,6 +747,21 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
 
   Widget _preview() {
     final player = _player;
+    if (_clip.isImage) {
+      final c = _clip;
+      return Center(
+        child: _framed(
+          Image.file(
+            File(c.media.path),
+            fit: BoxFit.contain,
+            errorBuilder: (_, _, _) => const ColoredBox(color: Colors.black26),
+          ),
+          c.media.width > 0 && c.media.height > 0
+              ? c.media.width / c.media.height
+              : 16 / 9,
+        ),
+      );
+    }
     return Center(
       child: player != null && player.value.isInitialized
           ? GestureDetector(
@@ -692,19 +770,21 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  _framedVideo(player),
+                  _framed(VideoPlayer(player), player.value.aspectRatio),
                   ValueListenableBuilder<VideoPlayerValue>(
                     valueListenable: player,
-                    builder: (_, v, _) => AnimatedOpacity(
-                      opacity: v.isPlaying ? 0 : 1,
-                      duration: const Duration(milliseconds: 150),
-                      child: const CircleAvatar(
-                        radius: 30,
-                        backgroundColor: Colors.black54,
-                        child: Icon(
-                          Icons.play_arrow_rounded,
-                          size: 40,
-                          color: Colors.white,
+                    builder: (_, v, _) => IgnorePointer(
+                      child: AnimatedOpacity(
+                        opacity: v.isPlaying ? 0 : 1,
+                        duration: const Duration(milliseconds: 150),
+                        child: const CircleAvatar(
+                          radius: 30,
+                          backgroundColor: Colors.black54,
+                          child: Icon(
+                            Icons.play_arrow_rounded,
+                            size: 40,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ),
@@ -786,13 +866,13 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
                           fit: StackFit.expand,
                           children: [
                             MediaThumb(c.media, showDuration: false),
-                            if (c.fade)
+                            if (c.transition != TransitionKind.none)
                               const Positioned(
                                 top: 4,
                                 right: 4,
                                 child: Icon(
-                                  Icons.gradient_rounded,
-                                  size: 16,
+                                  Icons.swap_horiz_rounded,
+                                  size: 18,
                                   color: Colors.white,
                                 ),
                               ),
@@ -806,7 +886,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
                                   vertical: 2,
                                 ),
                                 child: Text(
-                                  '${clock(c.outputMs)}${c.speed != 1 ? ' · ${formatNumber(c.speed)}×' : ''}',
+                                  '${c.isImage ? '🖼 ' : ''}${clock(c.outputMs)}${c.speed != 1 ? ' · ${formatNumber(c.speed)}×' : ''}',
                                   textAlign: TextAlign.center,
                                   style: const TextStyle(
                                     color: Colors.white,
@@ -827,7 +907,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: IconButton.filledTonal(
-              tooltip: 'Ajouter une vidéo',
+              tooltip: 'Ajouter un extrait',
               icon: const Icon(Icons.add_rounded),
               onPressed: _addClip,
             ),
@@ -841,6 +921,29 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
   Widget _scrubber() {
     final player = _player;
     final c = _clip;
+    if (c.isImage) {
+      return SizedBox(
+        height: 32,
+        child: ValueListenableBuilder<int>(
+          valueListenable: _pos,
+          builder: (_, ms, _) => Row(
+            children: [
+              const SizedBox(width: 12),
+              Text(clock(ms), style: const TextStyle(fontSize: 11)),
+              Expanded(
+                child: Slider(
+                  min: 0,
+                  max: math.max(1, c.outputMs).toDouble(),
+                  value: ms.clamp(0, math.max(1, c.outputMs)).toDouble(),
+                  onChanged: (v) => _pos.value = v.round(),
+                ),
+              ),
+              const SizedBox(width: 12),
+            ],
+          ),
+        ),
+      );
+    }
     if (player == null || !player.value.isInitialized) {
       return const SizedBox(height: 4);
     }
@@ -1478,37 +1581,9 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
     );
   }
 
-  Widget _fadesPanel() {
-    final c = _clip;
-    final last = _selected == _project.clips.length - 1;
-    return Column(
-      children: [
-        SwitchListTile(
-          dense: true,
-          title: const Text("Fondu d'ouverture"),
-          subtitle: const Text('La vidéo apparaît depuis le noir'),
-          value: _project.openingFade,
-          onChanged: (v) => _edit(() => _project.openingFade = v),
-        ),
-        SwitchListTile(
-          dense: true,
-          title: Text(
-            last ? 'Fondu de fermeture' : 'Transition vers le suivant',
-          ),
-          subtitle: Text(
-            last
-                ? "La vidéo s'éteint vers le noir à la fin"
-                : "Fondu au noir à la fin de cet extrait, puis réapparition",
-          ),
-          value: c.fade,
-          onChanged: (v) => _edit(() => c.fade = v),
-        ),
-      ],
-    );
-  }
-
   Widget _trimPanel() {
     final c = _clip;
+    if (c.isImage) return _imageDurationPanel();
     final max = c.sourceMs <= 0 ? 1.0 : c.sourceMs.toDouble();
     return Column(
       children: [
@@ -1544,12 +1619,23 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
             ],
           ),
         ),
+        _cutSection(),
       ],
     );
   }
 
   Widget _speedPanel() {
     final c = _clip;
+    if (c.isImage) {
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: Text(
+          "Une image n'a pas de vitesse : réglez sa durée dans « Couper ».",
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 12, color: Colors.white70),
+        ),
+      );
+    }
     return Column(
       children: [
         Padding(
@@ -1666,6 +1752,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
               : null,
           onTap: _pickMusic,
         ),
+        _soundsSection(),
       ],
     );
   }

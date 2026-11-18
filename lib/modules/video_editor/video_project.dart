@@ -131,7 +131,27 @@ class ClipLook {
 /// Part of a clip's frame that stays visible, as shown or exported.
 const maxZoom = 1.25;
 
-/// A part of a video, with its own speed and rotation.
+/// How a clip hands over to the next one.
+enum TransitionKind {
+  none('Aucune'),
+  fade('Fondu noir'),
+  flash('Flash blanc'),
+  slideLeft('Glissé ←'),
+  slideRight('Glissé →'),
+  zoom('Zoom');
+
+  const TransitionKind(this.label);
+  final String label;
+}
+
+/// Longest image clip, in milliseconds.
+const maxImageMs = 60000;
+
+/// Length of an image clip when it is added.
+const defaultImageMs = 4000;
+
+/// A part of a video (or a still image shown for a while), with its own
+/// speed and rotation.
 class Clip {
   Clip(
     this.media, {
@@ -141,7 +161,9 @@ class Clip {
     this.rotation = 0,
     this.shownSize,
     this.volume = 1,
-    this.fade = false,
+    bool fade = false,
+    TransitionKind? transition,
+    this.transitionMs = fadeMs,
     this.filter = VideoFilter.none,
     this.brightness = 1,
     this.contrastAdjust = 0,
@@ -150,7 +172,11 @@ class Clip {
     this.blur = 0,
     this.flip = false,
   }) : startMs = startMs ?? 0,
-       endMs = endMs ?? media.duration.inMilliseconds;
+       endMs =
+           endMs ??
+           (media.video ? media.duration.inMilliseconds : defaultImageMs),
+       transition =
+           transition ?? (fade ? TransitionKind.fade : TransitionKind.none);
 
   final Media media;
   int startMs;
@@ -166,8 +192,24 @@ class Clip {
   /// Sound level of this clip, from 0 (silent) to 2 (twice as loud).
   double volume;
 
+  /// How this clip hands over to the next one (or closes the video).
+  TransitionKind transition;
+
+  /// Length of that transition, in milliseconds.
+  int transitionMs;
+
   /// Fades to black at the end of this clip and back in on the next one.
-  bool fade;
+  bool get fade => transition == TransitionKind.fade;
+  set fade(bool v) {
+    if (v) {
+      transition = TransitionKind.fade;
+    } else if (transition == TransitionKind.fade) {
+      transition = TransitionKind.none;
+    }
+  }
+
+  /// A still picture rather than a video.
+  bool get isImage => !media.video;
 
   /// Preset look, then the three adjustments on top of it.
   VideoFilter filter;
@@ -212,7 +254,7 @@ class Clip {
     saturationAdjust = 1;
   }
 
-  int get sourceMs => media.duration.inMilliseconds;
+  int get sourceMs => isImage ? maxImageMs : media.duration.inMilliseconds;
   int get keptMs => endMs - startMs;
 
   /// Length in the finished video.
@@ -240,7 +282,8 @@ class Clip {
     rotation: rotation,
     shownSize: shownSize,
     volume: volume,
-    fade: fade,
+    transition: transition,
+    transitionMs: transitionMs,
     filter: filter,
     brightness: brightness,
     contrastAdjust: contrastAdjust,
@@ -258,6 +301,8 @@ class Clip {
     'rotation': rotation,
     'volume': volume,
     'fade': fade,
+    'transition': transition.name,
+    'transitionMs': transitionMs,
     'filter': filter.name,
     'brightness': brightness,
     'contrast': contrastAdjust,
@@ -275,6 +320,13 @@ class Clip {
     rotation: j['rotation'] as int,
     volume: (j['volume'] as num?)?.toDouble() ?? 1,
     fade: j['fade'] as bool? ?? false,
+    transition: TransitionKind.values
+        .where((t) => t.name == j['transition'])
+        .firstOrNull,
+    transitionMs: ((j['transitionMs'] as num?)?.toInt() ?? fadeMs).clamp(
+      200,
+      2000,
+    ),
     filter: VideoFilter.values.firstWhere(
       (f) => f.name == j['filter'],
       orElse: () => VideoFilter.none,
@@ -335,6 +387,8 @@ class TitleItem {
     this.size = 0.06,
     this.color = 0xFFFFFFFF,
     this.align = 0,
+    this.x,
+    this.y,
     this.animation = TitleAnimation.none,
     this.box = TitleBox.shade,
   });
@@ -343,6 +397,11 @@ class TitleItem {
 
   /// −1 left, 0 centre, 1 right.
   int align;
+
+  /// Free position of the centre, as fractions (0–1) of the frame; when
+  /// set, it replaces [place] and [align].
+  double? x;
+  double? y;
   TitleAnimation animation;
   TitleBox box;
 
@@ -363,6 +422,8 @@ class TitleItem {
     'size': size,
     'color': color,
     'align': align,
+    'x': x,
+    'y': y,
     'animation': animation.name,
     'box': box.name,
   };
@@ -378,6 +439,8 @@ class TitleItem {
     size: (j['size'] as num).toDouble(),
     color: j['color'] as int,
     align: ((j['align'] as num?)?.toInt() ?? 0).clamp(-1, 1),
+    x: (j['x'] as num?)?.toDouble().clamp(0.0, 1.0),
+    y: (j['y'] as num?)?.toDouble().clamp(0.0, 1.0),
     animation: TitleAnimation.values.firstWhere(
       (a) => a.name == j['animation'],
       orElse: () => TitleAnimation.none,
@@ -391,6 +454,251 @@ class TitleItem {
 
 /// Length of a fade to black, in milliseconds.
 const fadeMs = 600;
+
+/// A picture or a video laid over the montage on its own track.
+class OverlayClip {
+  OverlayClip(
+    this.media, {
+    this.startMs = 0,
+    this.trimStartMs = 0,
+    int? durationMs,
+    this.cx = 0.72,
+    this.cy = 0.28,
+    this.width = 0.34,
+    this.opacity = 1,
+    this.volume = 0,
+    this.track = 0,
+  }) : durationMs =
+           durationMs ??
+           (media.video
+               ? math.min(media.duration.inMilliseconds, 5000)
+               : defaultImageMs);
+
+  final Media media;
+
+  /// Moment of the finished video where it appears.
+  int startMs;
+
+  /// For a video: where in the source it starts.
+  int trimStartMs;
+
+  /// How long it stays.
+  int durationMs;
+
+  /// Centre of the picture, as fractions (0–1) of the frame.
+  double cx;
+  double cy;
+
+  /// Width as a fraction of the frame's width.
+  double width;
+  double opacity;
+
+  /// Sound of an overlaid video (0 = silent, the default).
+  double volume;
+
+  /// Lane (0 is the lowest); a higher lane is drawn on top.
+  int track;
+
+  bool get isImage => !media.video;
+  int get endMs => startMs + durationMs;
+
+  /// Longest it can last: a video's remaining source, or an image's limit.
+  int get maxDurationMs => isImage
+      ? maxImageMs
+      : math.max(minClipMs, media.duration.inMilliseconds - trimStartMs);
+
+  OverlayClip copy() => OverlayClip(
+    media,
+    startMs: startMs,
+    trimStartMs: trimStartMs,
+    durationMs: durationMs,
+    cx: cx,
+    cy: cy,
+    width: width,
+    opacity: opacity,
+    volume: volume,
+    track: track,
+  );
+
+  Map<String, Object?> toJson() => {
+    'media': media.toJson(),
+    'start': startMs,
+    'trim': trimStartMs,
+    'duration': durationMs,
+    'cx': cx,
+    'cy': cy,
+    'width': width,
+    'opacity': opacity,
+    'volume': volume,
+    'track': track,
+  };
+
+  static OverlayClip fromJson(Map<String, dynamic> j) => OverlayClip(
+    Media.fromJson(j['media'] as Map<String, dynamic>),
+    startMs: ((j['start'] as num?)?.toInt() ?? 0).clamp(0, 1 << 31),
+    trimStartMs: ((j['trim'] as num?)?.toInt() ?? 0).clamp(0, 1 << 31),
+    durationMs: ((j['duration'] as num?)?.toInt() ?? defaultImageMs).clamp(
+      minClipMs,
+      1 << 31,
+    ),
+    cx: ((j['cx'] as num?)?.toDouble() ?? 0.5).clamp(0.0, 1.0),
+    cy: ((j['cy'] as num?)?.toDouble() ?? 0.5).clamp(0.0, 1.0),
+    width: ((j['width'] as num?)?.toDouble() ?? 0.34).clamp(0.05, 1.0),
+    opacity: ((j['opacity'] as num?)?.toDouble() ?? 1).clamp(0.1, 1.0),
+    volume: ((j['volume'] as num?)?.toDouble() ?? 0).clamp(0.0, 2.0),
+    track: ((j['track'] as num?)?.toInt() ?? 0).clamp(0, overlayLanes - 1),
+  );
+}
+
+/// How many lanes of overlays the timeline offers.
+const overlayLanes = 3;
+
+/// A sound (music, effect, voice) placed on the montage's timeline.
+class AudioClip {
+  AudioClip(
+    this.path,
+    this.name, {
+    this.startMs = 0,
+    this.trimStartMs = 0,
+    required this.durationMs,
+    this.sourceMs = 0,
+    this.volume = 1,
+  });
+
+  final String path;
+  final String name;
+
+  /// Moment of the finished video where it starts.
+  int startMs;
+
+  /// Where in the file it starts playing.
+  int trimStartMs;
+  int durationMs;
+
+  /// Length of the whole file when known (0 = unknown).
+  int sourceMs;
+
+  /// 0 (silent) … 2.
+  double volume;
+
+  int get endMs => startMs + durationMs;
+
+  /// Longest it can last from its start point.
+  int get maxDurationMs =>
+      sourceMs > 0 ? math.max(minClipMs, sourceMs - trimStartMs) : 1 << 31;
+
+  Map<String, Object?> toJson() => {
+    'path': path,
+    'name': name,
+    'start': startMs,
+    'trim': trimStartMs,
+    'duration': durationMs,
+    'source': sourceMs,
+    'volume': volume,
+  };
+
+  static AudioClip fromJson(Map<String, dynamic> j) => AudioClip(
+    j['path'] as String,
+    (j['name'] as String?) ?? 'Son',
+    startMs: ((j['start'] as num?)?.toInt() ?? 0).clamp(0, 1 << 31),
+    trimStartMs: ((j['trim'] as num?)?.toInt() ?? 0).clamp(0, 1 << 31),
+    durationMs: ((j['duration'] as num?)?.toInt() ?? 5000).clamp(
+      minClipMs,
+      1 << 31,
+    ),
+    sourceMs: (j['source'] as num?)?.toInt() ?? 0,
+    volume: ((j['volume'] as num?)?.toDouble() ?? 1).clamp(0.0, 2.0),
+  );
+}
+
+/// How a clip's picture is moved and dimmed at one moment: the same
+/// formulas as the exporter, so the preview shows what will be made.
+class ClipPose {
+  const ClipPose({this.scale = 1, this.dx = 0, this.dy = 0, this.gain = 1});
+
+  /// Enlargement around the centre.
+  final double scale;
+
+  /// Shift, where 2 is the whole width (or height) of the frame.
+  final double dx;
+  final double dy;
+
+  /// Brightness multiplier: 0 black, 1 as is, above 1 burns to white.
+  final double gain;
+
+  bool get isNeutral => scale == 1 && dx == 0 && dy == 0 && gain == 1;
+}
+
+double _ease(double x) {
+  final k = x.clamp(0.0, 1.0);
+  return k * k * (3 - 2 * k);
+}
+
+/// Image clips and any clip showing in the preview: a clip's pose
+/// at [outMs] after its start in the finished video.
+ClipPose clipPoseAt({
+  required ClipEffect effect,
+  required int outMs,
+  required int durationMs,
+  TransitionKind arriving = TransitionKind.none,
+  int arrivingMs = 0,
+  TransitionKind leaving = TransitionKind.none,
+  int leavingMs = 0,
+  int fadeInMs = 0,
+  int fadeOutMs = 0,
+}) {
+  var scale = 1.0, dx = 0.0, dy = 0.0, gain = 1.0;
+  final sec = outMs / 1000;
+  final p = durationMs <= 0 ? 0.0 : (outMs / durationMs).clamp(0.0, 1.0);
+  switch (effect) {
+    case ClipEffect.none:
+      break;
+    case ClipEffect.zoomIn:
+      scale = 1 + 0.25 * p;
+    case ClipEffect.zoomOut:
+      scale = 1.25 - 0.25 * p;
+    case ClipEffect.pulse:
+      scale = 1 + 0.06 * (0.5 + 0.5 * math.sin(sec * 2 * math.pi / 0.8));
+    case ClipEffect.shake:
+      scale = 1.06;
+      dx = 0.02 * math.sin(sec * 38);
+      dy = 0.02 * math.sin(sec * 51 + 1);
+  }
+  void apply(TransitionKind kind, double k, bool arrives) {
+    if (k <= 0) return;
+    switch (kind) {
+      case TransitionKind.slideLeft:
+        dx += arrives ? 2 * k : -2 * k;
+      case TransitionKind.slideRight:
+        dx += arrives ? -2 * k : 2 * k;
+      case TransitionKind.zoom:
+        scale *= 1 + 0.6 * k;
+        gain *= 1 - k;
+      case TransitionKind.flash:
+        gain *= 1 + 11 * k * k;
+      case TransitionKind.none:
+      case TransitionKind.fade:
+        break;
+    }
+  }
+
+  if (arriving != TransitionKind.none && arrivingMs > 0 && outMs < arrivingMs) {
+    apply(arriving, 1 - _ease(outMs / arrivingMs), true);
+  }
+  final outStart = durationMs - leavingMs;
+  if (leaving != TransitionKind.none && leavingMs > 0 && outMs > outStart) {
+    apply(leaving, _ease((outMs - outStart) / leavingMs), false);
+  }
+  // Fades to black (linear, as in the exporter).
+  if (fadeInMs > 0 && outMs < fadeInMs) gain *= outMs / fadeInMs;
+  if (fadeOutMs > 0 && outMs > durationMs - fadeOutMs) {
+    gain *= (1 - (outMs - (durationMs - fadeOutMs)) / fadeOutMs).clamp(
+      0.0,
+      1.0,
+    );
+  }
+  return ClipPose(scale: scale, dx: dx, dy: dy, gain: gain.clamp(0.0, 12.0));
+}
 
 /// Shape of the finished video.
 enum Aspect {
@@ -431,6 +739,12 @@ class VideoProject {
   double musicVolume = 1;
   final List<TitleItem> titles = [];
 
+  /// Pictures and videos over the main track.
+  final List<OverlayClip> overlays = [];
+
+  /// Sounds placed on the timeline, on top of the music.
+  final List<AudioClip> sounds = [];
+
   /// Fade in from black at the very start.
   bool openingFade = false;
 
@@ -469,9 +783,38 @@ class VideoProject {
     final second = c.copy()..startMs = sourceMs;
     c.endMs = sourceMs;
     // A fade belongs to the end of the clip: it moves to the second part.
-    second.fade = c.fade;
-    c.fade = false;
+    second.transition = c.transition;
+    second.transitionMs = c.transitionMs;
+    c.transition = TransitionKind.none;
     clips.insert(index + 1, second);
+    return true;
+  }
+
+  /// Removes the passage [fromMs]–[toMs] (moments of the source video) from
+  /// the clip at [index]: what is left on each side stays as two clips. False
+  /// when nothing sensible would remain or the passage is empty.
+  bool cutOut(int index, int fromMs, int toMs) {
+    final c = clips[index];
+    if (c.isImage) return false;
+    final from = math.max(fromMs, c.startMs);
+    final to = math.min(toMs, c.endMs);
+    if (to - from < 100) return false;
+    final leftOk = from - c.startMs >= minClipMs;
+    final rightOk = c.endMs - to >= minClipMs;
+    if (!leftOk && !rightOk) return false;
+    if (leftOk && rightOk) {
+      final second = c.copy()..startMs = to;
+      // A transition belongs to the end of the clip: the second part keeps it.
+      second.transition = c.transition;
+      second.transitionMs = c.transitionMs;
+      c.endMs = from;
+      c.transition = TransitionKind.none;
+      clips.insert(index + 1, second);
+    } else if (leftOk) {
+      c.endMs = from; // the end of the clip is what was removed
+    } else {
+      c.startMs = to;
+    }
     return true;
   }
 
@@ -494,6 +837,9 @@ class VideoProject {
     if (clips.isEmpty) return 'Ajoutez au moins une vidéo';
     for (final c in clips) {
       if (c.keptMs < minClipMs) return 'Un extrait est trop court';
+    }
+    for (final o in overlays) {
+      if (o.durationMs < minClipMs) return 'Une incrustation est trop courte';
     }
     // Four hours of 1080p is far beyond what a phone finishes.
     if (totalMs > 4 * 3600 * 1000) return 'Le montage dépasse 4 heures';
@@ -522,6 +868,8 @@ class VideoProject {
             'volume': clips[i].volume,
             'fadeInMs': _fadeIn(i),
             'fadeOutMs': _fadeOut(i),
+            if (clips[i].isImage) 'image': true,
+            ..._slide(i),
             'flip': clips[i].flip,
             'effect': clips[i].effect.index,
             'blur': clips[i].blur,
@@ -531,6 +879,39 @@ class VideoProject {
             },
           },
       ],
+      if (overlays.isNotEmpty)
+        'overlays': [
+          for (final o in overlays)
+            if (o.startMs < totalMs)
+              {
+                'image': o.isImage,
+                'uri': o.media.uri,
+                'startMs': o.startMs,
+                'trimStartMs': o.trimStartMs,
+                'durationMs': math.min(o.durationMs, totalMs - o.startMs),
+                'cx': o.cx,
+                'cy': o.cy,
+                'width': o.width,
+                'opacity': o.opacity,
+                'volume': o.volume,
+                'track': o.track,
+                'aspect': o.media.width > 0 && o.media.height > 0
+                    ? o.media.width / o.media.height
+                    : 16 / 9,
+              },
+        ],
+      if (sounds.isNotEmpty)
+        'sounds': [
+          for (final a in sounds)
+            if (a.startMs < totalMs)
+              {
+                'path': a.path,
+                'startMs': a.startMs,
+                'trimStartMs': a.trimStartMs,
+                'durationMs': math.min(a.durationMs, totalMs - a.startMs),
+                'volume': a.volume,
+              },
+        ],
       'titles': [
         for (final t in titles)
           if (t.text.trim().isNotEmpty && t.startMs < totalMs)
@@ -542,6 +923,7 @@ class VideoProject {
               'size': t.size,
               'color': t.color,
               'align': t.align,
+              if (t.x != null && t.y != null) ...{'x': t.x, 'y': t.y},
               'animation': t.animation.index,
               'box': t.box.index,
             },
@@ -549,14 +931,63 @@ class VideoProject {
     };
   }
 
+  /// Where clip [i] stands [outMs] after its start, transitions included.
+  ClipPose poseAt(int i, int outMs) {
+    final c = clips[i];
+    final prev = i > 0 ? clips[i - 1] : null;
+    final last = i == clips.length - 1;
+    bool special(TransitionKind k) =>
+        k != TransitionKind.none && k != TransitionKind.fade;
+    return clipPoseAt(
+      effect: c.effect,
+      outMs: outMs,
+      durationMs: c.outputMs,
+      arriving: prev != null && special(prev.transition)
+          ? prev.transition
+          : TransitionKind.none,
+      arrivingMs: prev == null
+          ? 0
+          : math.min(prev.transitionMs, c.outputMs ~/ 2),
+      leaving: !last && special(c.transition)
+          ? c.transition
+          : TransitionKind.none,
+      leavingMs: math.min(c.transitionMs, c.outputMs ~/ 2),
+      fadeInMs: _fadeIn(i),
+      fadeOutMs: _fadeOut(i),
+    );
+  }
+
   /// Fade-in of clip [i]: from black at the start, or after a faded clip.
   int _fadeIn(int i) {
     final wanted = i == 0 ? openingFade : clips[i - 1].fade;
-    return wanted ? math.min(fadeMs, clips[i].outputMs ~/ 2) : 0;
+    if (!wanted) return 0;
+    final span = i == 0 ? fadeMs : clips[i - 1].transitionMs;
+    return math.min(span, clips[i].outputMs ~/ 2);
   }
 
-  int _fadeOut(int i) =>
-      clips[i].fade ? math.min(fadeMs, clips[i].outputMs ~/ 2) : 0;
+  int _fadeOut(int i) => clips[i].fade
+      ? math.min(clips[i].transitionMs, clips[i].outputMs ~/ 2)
+      : 0;
+
+  /// Transitions other than the fade to black: how clip [i] leaves and
+  /// how it arrives after the previous one. The last clip only closes.
+  Map<String, Object?> _slide(int i) {
+    bool special(TransitionKind k) =>
+        k != TransitionKind.none && k != TransitionKind.fade;
+    final out = clips[i].transition;
+    final inn = i > 0 ? clips[i - 1].transition : TransitionKind.none;
+    final last = i == clips.length - 1;
+    return {
+      if (!last && special(out)) ...{
+        'trOut': out.index,
+        'trOutMs': math.min(clips[i].transitionMs, clips[i].outputMs ~/ 2),
+      },
+      if (special(inn)) ...{
+        'trIn': inn.index,
+        'trInMs': math.min(clips[i - 1].transitionMs, clips[i].outputMs ~/ 2),
+      },
+    };
+  }
 
   Map<String, Object?> toJson() => {
     'id': id,
@@ -569,6 +1000,8 @@ class VideoProject {
     'musicVolume': musicVolume,
     'titles': [for (final t in titles) t.toJson()],
     'openingFade': openingFade,
+    'overlays': [for (final o in overlays) o.toJson()],
+    'sounds': [for (final a in sounds) a.toJson()],
     'aspect': aspect.name,
     'fill': fillFrame,
   };
@@ -595,6 +1028,14 @@ class VideoProject {
         orElse: () => Aspect.original,
       )
       ..fillFrame = j['fill'] as bool? ?? false
+      ..overlays.addAll([
+        for (final o in (j['overlays'] as List? ?? const []))
+          OverlayClip.fromJson(o as Map<String, dynamic>),
+      ])
+      ..sounds.addAll([
+        for (final a in (j['sounds'] as List? ?? const []))
+          AudioClip.fromJson(a as Map<String, dynamic>),
+      ])
       ..titles.addAll([
         for (final t in (j['titles'] as List? ?? const []))
           TitleItem.fromJson(t as Map<String, dynamic>),

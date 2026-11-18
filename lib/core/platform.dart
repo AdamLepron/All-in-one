@@ -242,6 +242,17 @@ class MediaChannel {
     }
   }
 
+  /// A caveat about the export that just ended, if any (said once).
+  static Future<String?> exportWarning() async {
+    try {
+      return await _channel.invokeMethod<String>('exportWarning');
+    } on MissingPluginException {
+      return null;
+    } on PlatformException {
+      return null;
+    }
+  }
+
   static Future<void> cancelExport() => _quiet('cancelExport', const {});
 
   static Future<bool> hasTorch() async => await _flag('hasTorch', const {});

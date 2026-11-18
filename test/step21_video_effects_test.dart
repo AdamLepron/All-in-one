@@ -243,6 +243,21 @@ void main() {
       await tester.pumpAndSettle();
     }
 
+    Future<void> tool(WidgetTester tester, String label) async {
+      await tester.scrollUntilVisible(
+        find.text(label),
+        80,
+        scrollable: find.descendant(
+          of: find.byKey(const ValueKey('tool-tabs')),
+          matching: find.byType(Scrollable),
+        ),
+      );
+      await tester.ensureVisible(find.text(label));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(label));
+      await tester.pumpAndSettle();
+    }
+
     testWidgets('filters, effects and format panels change the clip', (
       tester,
     ) async {
@@ -252,27 +267,22 @@ void main() {
         expect(find.text(label), findsOneWidget);
       }
 
-      await tester.ensureVisible(find.text('Filtres'));
-      await tester.tap(find.text('Filtres'));
-      await tester.pumpAndSettle();
+      await tool(tester, 'Filtres');
       await tester.tap(find.bySemanticsLabel('Filtre Sépia'));
       await tester.pumpAndSettle();
       expect(find.text('Sépia'), findsOneWidget);
+      await tester.ensureVisible(find.text('Réinitialiser'));
       await tester.tap(find.text('Réinitialiser'));
       await tester.pumpAndSettle();
 
-      await tester.ensureVisible(find.text('Effets'));
-      await tester.tap(find.text('Effets'));
-      await tester.pumpAndSettle();
+      await tool(tester, 'Effets');
       await tester.tap(find.text('Zoom avant'));
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.byType(SwitchListTile));
       await tester.tap(find.byType(SwitchListTile));
       await tester.pumpAndSettle();
 
-      await tester.ensureVisible(find.text('Format'));
-      await tester.tap(find.text('Format'));
-      await tester.pumpAndSettle();
+      await tool(tester, 'Format');
       await tester.tap(find.text('9:16'));
       await tester.pumpAndSettle();
       expect(find.text('Vidéo finale : 1080 × 1920'), findsOneWidget);

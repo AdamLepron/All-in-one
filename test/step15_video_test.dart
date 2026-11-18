@@ -193,7 +193,8 @@ void main() {
       for (final c in json['clips']! as List) {
         (c as Map<String, Object?>)
           ..remove('volume')
-          ..remove('fade');
+          ..remove('fade')
+          ..remove('transition');
       }
       json
         ..remove('titles')
