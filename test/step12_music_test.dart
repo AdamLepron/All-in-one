@@ -1,4 +1,9 @@
+import 'dart:io';
+
 import 'package:all_in_one/core/settings.dart';
+import 'package:all_in_one/modules/equalizer/equalizer_controller.dart';
+import 'package:all_in_one/modules/music/lyrics_page.dart';
+import 'package:all_in_one/modules/music/now_playing.dart';
 import 'package:all_in_one/modules/music/music_controller.dart';
 import 'package:all_in_one/modules/music/music_page.dart';
 import 'package:all_in_one/modules/music/song.dart';
@@ -19,6 +24,7 @@ Song song(int id, String title) => Song(
 );
 
 void main() {
+  lyricsAndPlayerTests();
   late AppSettings settings;
   late MusicController music;
 
@@ -126,5 +132,64 @@ void main() {
     await tester.pumpAndSettle();
     expect(settings.playlists.single.songIds, isEmpty);
     expect(find.textContaining('Playlist vide'), findsOneWidget);
+  });
+}
+
+void lyricsAndPlayerTests() {
+  testWidgets('now playing fits a narrow phone; lyrics page follows the song', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final settings = AppSettings(await SharedPreferences.getInstance());
+    final music = MusicController(settings);
+    final dir = Directory.systemTemp.createTempSync('lyr');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    File('${dir.path}/aube.lrc').writeAsStringSync(
+      '[00:00.00]Premier vers\n[00:30.00]Second vers\n[01:00.00]Troisième',
+    );
+    final s = Song(
+      id: 1,
+      title: 'Aube',
+      artist: 'A',
+      album: 'B',
+      albumId: 1,
+      duration: const Duration(minutes: 3),
+      uri: 'content://1',
+      path: '${dir.path}/aube.mp3',
+    );
+    music.debugSetLibrary([s], playingIndex: 0);
+    tester.view.physicalSize = const Size(360 * 3, 800 * 3);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+    Widget app(Widget home) => MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: settings),
+        ChangeNotifierProvider.value(value: music),
+        ChangeNotifierProvider(
+          create: (_) => EqualizerController(settings, music),
+        ),
+      ],
+      child: MaterialApp(home: home),
+    );
+    await tester.pumpWidget(app(const Scaffold(body: NowPlaying())));
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(find.byTooltip('Paroles'), findsOneWidget);
+
+    await tester.pumpWidget(app(const LyricsPage()));
+    await tester.pump(); // starts loading the file
+    for (var k = 0; k < 40; k++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+      if (find.text('Premier vers').evaluate().isNotEmpty) break;
+    }
+    expect(find.text('Premier vers'), findsOneWidget);
+    // Moving to 31 s highlights the second line (it becomes bold/larger).
+    music.position.value = const Duration(seconds: 31);
+    await tester.pump(const Duration(milliseconds: 500));
+    final second = tester.widget<Text>(find.text('Second vers'));
+    expect(second.style?.fontSize, 22);
   });
 }

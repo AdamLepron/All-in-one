@@ -10,9 +10,21 @@ import '../gallery/media_library.dart';
 import '../video_editor/video_editor_home.dart';
 import 'video_player_page.dart';
 
-void playVideo(BuildContext context, Media media) {
+/// Plays [media]; with a [list], the following videos play automatically.
+void playVideo(
+  BuildContext context,
+  Media media, [
+  List<Media> list = const [],
+]) {
+  final index = list.indexOf(media);
   Navigator.of(context).push(
-    MaterialPageRoute<void>(builder: (_) => VideoPlayerPage(media: media)),
+    MaterialPageRoute<void>(
+      builder: (_) => VideoPlayerPage(
+        media: media,
+        playlist: index < 0 ? const [] : list,
+        index: index < 0 ? 0 : index,
+      ),
+    ),
   );
 }
 
@@ -143,7 +155,8 @@ class _VideoPageState extends State<VideoPage> {
                             padding: EdgeInsets.all(32),
                             child: Center(child: Text('Aucun résultat')),
                           ),
-                        for (final v in videos) _VideoTile(media: v),
+                        for (final v in videos)
+                          _VideoTile(media: v, list: videos),
                       ],
                     ),
                   ),
@@ -154,8 +167,9 @@ class _VideoPageState extends State<VideoPage> {
 }
 
 class _VideoTile extends StatelessWidget {
-  const _VideoTile({required this.media});
+  const _VideoTile({required this.media, this.list = const []});
   final Media media;
+  final List<Media> list;
 
   @override
   Widget build(BuildContext context) {
@@ -165,7 +179,7 @@ class _VideoTile extends StatelessWidget {
     final position = settings.videoPosition(media.key);
     final total = media.duration.inMilliseconds;
     return InkWell(
-      onTap: () => playVideo(context, media),
+      onTap: () => playVideo(context, media, list),
       onLongPress: () => showModalBottomSheet<void>(
         context: context,
         builder: (sheet) => SafeArea(

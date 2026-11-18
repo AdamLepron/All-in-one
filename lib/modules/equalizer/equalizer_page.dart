@@ -70,28 +70,69 @@ class EqualizerPage extends StatelessWidget {
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: eqPresets.length + (eq.preset == null ? 1 : 0),
+              itemCount:
+                  eqPresets.length +
+                  eq.saved.length +
+                  1 + // "save" chip
+                  (eq.preset == null ? 1 : 0),
               separatorBuilder: (_, _) => const SizedBox(width: 8),
               itemBuilder: (_, i) {
                 // A custom curve gets its own leading chip.
-                if (eq.preset == null && i == 0) {
+                if (eq.preset == null) {
+                  if (i == 0) {
+                    return ChoiceChip(
+                      showCheckmark: false,
+                      label: const Text('Personnalisé'),
+                      selected: true,
+                      onSelected: (_) {},
+                    );
+                  }
+                  i--;
+                }
+                if (i < eqPresets.length) {
+                  final p = eqPresets[i];
                   return ChoiceChip(
                     showCheckmark: false,
-                    label: const Text('Personnalisé'),
-                    selected: true,
-                    onSelected: (_) {},
+                    label: Text(p.name),
+                    selected: p.name == eq.preset,
+                    onSelected: (_) => eq.selectPreset(p),
                   );
                 }
-                final p = eqPresets[i - (eq.preset == null ? 1 : 0)];
-                return ChoiceChip(
-                  showCheckmark: false,
-                  label: Text(p.name),
-                  selected: p.name == eq.preset,
-                  onSelected: (_) => eq.selectPreset(p),
+                i -= eqPresets.length;
+                if (i < eq.saved.length) {
+                  final m = eq.saved[i];
+                  final name = m['name']! as String;
+                  return GestureDetector(
+                    onLongPress: () => _confirmDelete(context, eq, name),
+                    child: Semantics(
+                      onLongPressHint: 'Supprimer ce préréglage',
+                      child: ChoiceChip(
+                        avatar: const Icon(Icons.person_outline, size: 16),
+                        showCheckmark: false,
+                        label: Text(name),
+                        selected: name == eq.preset,
+                        onSelected: (_) => eq.selectSaved(m),
+                      ),
+                    ),
+                  );
+                }
+                return ActionChip(
+                  avatar: const Icon(Icons.add, size: 18),
+                  label: const Text('Enregistrer'),
+                  onPressed: () => _saveDialog(context, eq),
                 );
               },
             ),
           ),
+          if (eq.output != null)
+            SwitchListTile(
+              title: Text('Profil : ${eq.outputLabel}'),
+              subtitle: const Text(
+                'Retrouver ces réglages à chaque fois que cet appareil audio est utilisé',
+              ),
+              value: eq.outputHasProfile,
+              onChanged: eq.setOutputProfile,
+            ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
             child: Card(
@@ -392,4 +433,56 @@ class _Effect extends StatelessWidget {
       ),
     );
   }
+}
+
+Future<void> _saveDialog(BuildContext context, EqualizerController eq) async {
+  final controller = TextEditingController();
+  final name = await showDialog<String>(
+    context: context,
+    builder: (dialog) => AlertDialog(
+      title: const Text('Enregistrer ce réglage'),
+      content: TextField(
+        controller: controller,
+        autofocus: true,
+        textCapitalization: TextCapitalization.sentences,
+        decoration: const InputDecoration(labelText: 'Nom du préréglage'),
+        onSubmitted: (v) => Navigator.pop(dialog, v),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialog),
+          child: const Text('Annuler'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(dialog, controller.text),
+          child: const Text('Enregistrer'),
+        ),
+      ],
+    ),
+  );
+  if (name != null) eq.saveCurrent(name);
+}
+
+Future<void> _confirmDelete(
+  BuildContext context,
+  EqualizerController eq,
+  String name,
+) async {
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (dialog) => AlertDialog(
+      title: Text('Supprimer « $name » ?'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialog, false),
+          child: const Text('Annuler'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(dialog, true),
+          child: const Text('Supprimer'),
+        ),
+      ],
+    ),
+  );
+  if (ok == true) eq.deleteSaved(name);
 }

@@ -122,6 +122,8 @@ void main() {
       );
       final sw = Stopwatch()..start();
       await tester.pump();
+      await tester.tap(find.text('Titres'));
+      await tester.pump();
       await tester.pump();
       expect(find.text('Titre 0'), findsWidgets);
       expect(find.byType(ListTile).evaluate().length, lessThan(40));

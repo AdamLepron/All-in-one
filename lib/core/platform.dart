@@ -192,6 +192,25 @@ class MediaChannel {
   static Future<void> keepScreenOn(bool on) =>
       _quiet('keepScreenOn', {'on': on});
 
+  /// What the sound goes to: {type: speaker|wired|usb|bluetooth, name}.
+  static Future<Map<String, Object?>?> audioOutput() async {
+    try {
+      return await _channel.invokeMapMethod<String, Object?>('audioOutput');
+    } on MissingPluginException {
+      return null;
+    } on PlatformException {
+      return null;
+    }
+  }
+
+  /// Lets the video leave to a floating window when the user goes home.
+  static Future<void> armPip(bool on, {int width = 16, int height = 9}) =>
+      _quiet('pipArm', {'on': on, 'w': width, 'h': height});
+
+  /// Shrinks the app to a floating window now; false when unsupported.
+  static Future<bool> enterPip({int width = 16, int height = 9}) =>
+      _flag('pipEnter', {'w': width, 'h': height});
+
   static Future<double?> _value(String method) async {
     try {
       return await _channel.invokeMethod<double>(method);

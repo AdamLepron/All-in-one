@@ -7,6 +7,7 @@ import '../../core/settings.dart';
 import '../../core/util.dart';
 import '../equalizer/equalizer_page.dart';
 import 'artwork.dart';
+import 'lyrics_page.dart';
 import 'music_controller.dart';
 import 'song.dart';
 
@@ -129,6 +130,16 @@ class _NowPlayingState extends State<NowPlaying> {
                     onPressed: () => Navigator.of(context).push(
                       MaterialPageRoute<void>(
                         builder: (_) => const EqualizerPage(),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Paroles',
+                    icon: const Icon(Icons.lyrics_outlined),
+                    color: white,
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const LyricsPage(),
                       ),
                     ),
                   ),

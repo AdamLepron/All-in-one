@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 import 'package:video_player/video_player.dart';
 
@@ -11,6 +13,8 @@ import '../../core/settings.dart';
 import '../../core/util.dart';
 import '../gallery/media_library.dart';
 import '../music/music_controller.dart';
+import '../music/song.dart';
+import 'subtitles.dart';
 
 const _speeds = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0];
 
@@ -23,14 +27,27 @@ enum _Drag { none, seek, brightness, volume }
 /// seeks, a vertical drag changes brightness (left half) or volume (right
 /// half), and holding plays at double speed.
 class VideoPlayerPage extends StatefulWidget {
-  const VideoPlayerPage({super.key, required this.media});
+  const VideoPlayerPage({
+    super.key,
+    required this.media,
+    this.playlist = const [],
+    this.index = 0,
+  });
   final Media media;
+
+  /// Videos played one after the other, [index] being [media].
+  final List<Media> playlist;
+  final int index;
 
   @override
   State<VideoPlayerPage> createState() => _VideoPlayerPageState();
 }
 
 class _VideoPlayerPageState extends State<VideoPlayerPage> {
+  /// Screens alive at once: moving to the next video briefly has two, and
+  /// the shared window settings must outlive the first.
+  static int _instances = 0;
+
   late final VideoPlayerController _video;
   late final AppSettings _settings;
   bool _ready = false;
@@ -43,6 +60,13 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   double _speed = 1;
   bool _boosting = false;
   bool _landscape = false;
+
+  List<SubtitleFile> _subtitleFiles = const [];
+  String? _subtitlePath;
+  bool _advancing = false;
+
+  bool get _hasNext => widget.index + 1 < widget.playlist.length;
+  bool get _hasPrevious => widget.index > 0 && widget.playlist.isNotEmpty;
 
   _Drag _drag = _Drag.none;
   Offset _dragStart = Offset.zero;
@@ -59,6 +83,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   @override
   void initState() {
     super.initState();
+    _instances++;
     _settings = context.read<AppSettings>();
     context.read<MusicController>().pause();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
@@ -86,6 +111,12 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       _video.addListener(_onTick);
       await _video.play();
       setState(() => _ready = true);
+      unawaited(_findSubtitles());
+      MediaChannel.armPip(
+        true,
+        width: size.width.round().clamp(1, 100000),
+        height: size.height.round().clamp(1, 100000),
+      );
       _scheduleHide();
     } catch (e) {
       if (mounted) {
@@ -104,6 +135,53 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         setState(() {
           if (ended) _controls = true;
         });
+      }
+    }
+    if (ended && _hasNext && !_advancing) {
+      _advancing = true;
+      _open(widget.index + 1);
+    }
+  }
+
+  /// Replaces this screen by the video at [index] of the playlist.
+  void _open(int index) {
+    if (index < 0 || index >= widget.playlist.length) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute<void>(
+        builder: (_) => VideoPlayerPage(
+          media: widget.playlist[index],
+          playlist: widget.playlist,
+          index: index,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _findSubtitles() async {
+    final found = findSubtitles(widget.media.path);
+    if (!mounted) return;
+    setState(() => _subtitleFiles = found);
+    // A subtitle file named like the video is shown right away.
+    if (found.isNotEmpty) await _useSubtitles(found.first.path);
+  }
+
+  Future<void> _useSubtitles(String? path) async {
+    try {
+      if (path == null) {
+        await _video.setClosedCaptionFile(null);
+      } else {
+        final text = await readSubtitleText(path);
+        await _video.setClosedCaptionFile(
+          Future.value(parseSubtitles(path, text)),
+        );
+      }
+      if (mounted) setState(() => _subtitlePath = path);
+    } on Object {
+      if (mounted) {
+        setState(() => _subtitlePath = null);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Sous-titres illisibles')));
       }
     }
   }
@@ -130,10 +208,13 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       );
     }
     _video.dispose();
-    MediaChannel.keepScreenOn(false);
-    MediaChannel.setBrightness(-1);
-    SystemChrome.setPreferredOrientations(const []);
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    if (--_instances == 0) {
+      MediaChannel.armPip(false);
+      MediaChannel.keepScreenOn(false);
+      MediaChannel.setBrightness(-1);
+      SystemChrome.setPreferredOrientations(const []);
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    }
     super.dispose();
   }
 
@@ -257,6 +338,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
           : LayoutBuilder(
               builder: (context, box) {
                 final area = box.biggest;
+                // In the floating window there is no room for controls.
+                final mini = area.width < 360 || area.height < 220;
                 return Stack(
                   fit: StackFit.expand,
                   children: [
@@ -302,6 +385,42 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                         ),
                       ),
                     ),
+                    if (_subtitlePath != null)
+                      Positioned(
+                        left: 16,
+                        right: 16,
+                        bottom: _controls && !mini ? 84 : 24,
+                        child: IgnorePointer(
+                          child: ValueListenableBuilder<VideoPlayerValue>(
+                            valueListenable: _video,
+                            builder: (_, v, _) => v.caption.text.isEmpty
+                                ? const SizedBox.shrink()
+                                : Center(
+                                    child: DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        color: Colors.black54,
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 4,
+                                        ),
+                                        child: Text(
+                                          v.caption.text,
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: mini ? 11 : 17,
+                                            height: 1.25,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                          ),
+                        ),
+                      ),
                     if (_skipSide != 0)
                       Align(
                         alignment: _skipSide < 0
@@ -360,7 +479,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                           ),
                         ),
                       ),
-                    if (_controls && !_locked) ..._buildControls(context),
+                    if (_controls && !_locked && !mini)
+                      ..._buildControls(context),
                   ],
                 );
               },
@@ -428,6 +548,12 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                     onPressed: () => setState(() => _fill = !_fill),
                   ),
                   IconButton(
+                    tooltip: 'Plus d\'options',
+                    icon: const Icon(Icons.more_vert),
+                    color: white,
+                    onPressed: _showMore,
+                  ),
+                  IconButton(
                     tooltip: "Verrouiller l'écran",
                     icon: const Icon(Icons.lock_open_rounded),
                     color: white,
@@ -444,6 +570,14 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (_hasPrevious)
+              IconButton(
+                tooltip: 'Vidéo précédente',
+                iconSize: 36,
+                icon: const Icon(Icons.skip_previous_rounded),
+                color: white,
+                onPressed: () => _open(widget.index - 1),
+              ),
             IconButton(
               tooltip: 'Reculer de 10 secondes',
               iconSize: 40,
@@ -486,6 +620,14 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                 _scheduleHide();
               },
             ),
+            if (_hasNext)
+              IconButton(
+                tooltip: 'Vidéo suivante',
+                iconSize: 36,
+                icon: const Icon(Icons.skip_next_rounded),
+                color: white,
+                onPressed: () => _open(widget.index + 1),
+              ),
           ],
         ),
       ),
@@ -561,6 +703,203 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         ),
       ),
     ];
+  }
+
+  void _showMore() {
+    _hideTimer?.cancel();
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (sheet) => SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.subtitles_outlined),
+                title: const Text('Sous-titres'),
+                subtitle: Text(
+                  _subtitlePath == null ? 'Désactivés' : 'Activés',
+                ),
+                onTap: () {
+                  Navigator.pop(sheet);
+                  _pickSubtitles();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.audiotrack_outlined),
+                title: const Text('Piste audio'),
+                onTap: () {
+                  Navigator.pop(sheet);
+                  _pickAudioTrack();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.picture_in_picture_alt_rounded),
+                title: const Text("Image dans l'image"),
+                onTap: () async {
+                  Navigator.pop(sheet);
+                  final size = _video.value.size;
+                  final ok = await MediaChannel.enterPip(
+                    width: size.width.round().clamp(1, 100000),
+                    height: size.height.round().clamp(1, 100000),
+                  );
+                  if (!ok && mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text("Non disponible sur cet appareil"),
+                      ),
+                    );
+                  }
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.headphones_rounded),
+                title: const Text('Écouter sans l\'image'),
+                subtitle: const Text('Continue en arrière-plan, écran éteint'),
+                onTap: () {
+                  Navigator.pop(sheet);
+                  _toBackground();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    ).then((_) => _scheduleHide());
+  }
+
+  /// Hands the sound over to the music player, which keeps playing with the
+  /// screen off, and closes the video.
+  void _toBackground() {
+    final music = context.read<MusicController>();
+    final at = _video.value.position;
+    final m = widget.media;
+    music
+        .play(
+          [
+            Song(
+              // Negative ids never collide with the media library.
+              id: -(m.key.hashCode.abs() + 1),
+              title: m.name,
+              artist: 'Vidéo',
+              album: m.album,
+              albumId: -1,
+              duration: _video.value.duration,
+              uri: m.uri.startsWith('content:')
+                  ? m.uri
+                  : Uri.file(m.path).toString(),
+              path: m.path,
+            ),
+          ],
+          0,
+          shuffled: false,
+        )
+        .then((_) => music.seek(at));
+    Navigator.of(context).pop();
+  }
+
+  Future<void> _pickAudioTrack() async {
+    List<VideoAudioTrack> tracks = const [];
+    try {
+      tracks = await _video.getAudioTracks();
+    } on Object {
+      // Not supported by this player: the list stays empty.
+    }
+    if (!mounted) return;
+    _hideTimer?.cancel();
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheet) => SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const ListTile(title: Text('Piste audio')),
+              if (tracks.length < 2)
+                const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text('Cette vidéo n\'a qu\'une seule piste audio.'),
+                ),
+              if (tracks.length >= 2)
+                for (final (i, t) in tracks.indexed)
+                  ListTile(
+                    title: Text(trackName(t, i)),
+                    selected: t.isSelected,
+                    trailing: t.isSelected ? const Icon(Icons.check) : null,
+                    onTap: () {
+                      Navigator.pop(sheet);
+                      _video.selectAudioTrack(t.id);
+                    },
+                  ),
+            ],
+          ),
+        ),
+      ),
+    );
+    _scheduleHide();
+  }
+
+  Future<void> _pickSubtitles() async {
+    _hideTimer?.cancel();
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheet) => SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const ListTile(title: Text('Sous-titres')),
+              ListTile(
+                title: const Text('Désactivés'),
+                selected: _subtitlePath == null,
+                onTap: () {
+                  Navigator.pop(sheet);
+                  _useSubtitles(null);
+                },
+              ),
+              for (final f in _subtitleFiles)
+                ListTile(
+                  title: Text(f.label),
+                  subtitle: Text(
+                    f.path.split('/').last,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  selected: _subtitlePath == f.path,
+                  onTap: () {
+                    Navigator.pop(sheet);
+                    _useSubtitles(f.path);
+                  },
+                ),
+              ListTile(
+                leading: const Icon(Icons.folder_open_rounded),
+                title: const Text('Choisir un fichier .srt ou .vtt…'),
+                onTap: () {
+                  Navigator.pop(sheet);
+                  _browseSubtitles();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    _scheduleHide();
+  }
+
+  Future<void> _browseSubtitles() async {
+    final picked = await FilePicker.pickFile();
+    final path = picked?.path;
+    if (path == null) return;
+    if (!subtitleExtensions.contains(p.extension(path).toLowerCase())) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Choisissez un fichier .srt ou .vtt')),
+        );
+      }
+      return;
+    }
+    await _useSubtitles(path);
   }
 
   void _pickSpeed() {
@@ -712,4 +1051,19 @@ class _ErrorView extends StatelessWidget {
       ),
     );
   }
+}
+
+/// "Français", "Anglais · 5.1" … a readable name for an audio track.
+String trackName(VideoAudioTrack t, int index) {
+  final parts = <String>[
+    if ((t.label ?? '').trim().isNotEmpty)
+      t.label!.trim()
+    else if ((t.language ?? '').isNotEmpty && t.language != 'und')
+      t.language!.toUpperCase()
+    else
+      'Piste ${index + 1}',
+    if (t.channelCount != null && t.channelCount! > 2)
+      '${t.channelCount} canaux',
+  ];
+  return parts.join(' · ');
 }

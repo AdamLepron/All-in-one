@@ -106,6 +106,31 @@ class MainActivity : AudioServiceActivity() {
             }
     }
 
+    private var pipArmed = false
+    private var pipWidth = 16
+    private var pipHeight = 9
+
+    /** Floating window for the video player (Android 8+). */
+    private fun enterPip(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
+        if (!packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE)) return false
+        // Android only accepts ratios between about 0.42 and 2.39.
+        val ratio = (pipWidth.toDouble() / pipHeight.coerceAtLeast(1)).coerceIn(0.5, 2.0)
+        val params = android.app.PictureInPictureParams.Builder()
+            .setAspectRatio(android.util.Rational((ratio * 1000).toInt(), 1000))
+            .build()
+        return try {
+            enterPictureInPictureMode(params)
+        } catch (e: IllegalStateException) {
+            false
+        }
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (pipArmed) enterPip()
+    }
+
     private fun handleOnMainThread(call: MethodCall, result: MethodChannel.Result): Boolean {
         val audio = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         val max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
@@ -172,6 +197,32 @@ class MainActivity : AudioServiceActivity() {
                     call.argument<String>("label") ?: "",
                 )
             )
+            "audioOutput" -> {
+                val types = audio.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+                    .map { it.type to it.productName.toString() }
+                // Bluetooth (A2DP 8, SCO 7, BLE 26/27/30) wins over cables, then the speaker.
+                val bluetooth = types.firstOrNull { it.first in listOf(7, 8, 26, 27, 30) }
+                val wired = types.firstOrNull { it.first in listOf(3, 4) }
+                val usb = types.firstOrNull { it.first in listOf(11, 22) }
+                val out = when {
+                    bluetooth != null -> mapOf("type" to "bluetooth", "name" to bluetooth.second)
+                    wired != null -> mapOf("type" to "wired", "name" to wired.second)
+                    usb != null -> mapOf("type" to "usb", "name" to usb.second)
+                    else -> mapOf("type" to "speaker", "name" to "")
+                }
+                result.success(out)
+            }
+            "pipArm" -> {
+                pipArmed = call.argument<Boolean>("on") == true
+                pipWidth = call.argument<Number>("w")?.toInt() ?: 16
+                pipHeight = call.argument<Number>("h")?.toInt() ?: 9
+                result.success(null)
+            }
+            "pipEnter" -> {
+                pipWidth = call.argument<Number>("w")?.toInt() ?: 16
+                pipHeight = call.argument<Number>("h")?.toInt() ?: 9
+                result.success(enterPip())
+            }
             "keepScreenOn" -> {
                 if (call.argument<Boolean>("on") == true) {
                     window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)

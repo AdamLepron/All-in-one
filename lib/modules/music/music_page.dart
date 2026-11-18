@@ -13,6 +13,7 @@ import 'song.dart';
 const _green = Color(0xFF1DB954);
 
 enum _Filter {
+  home('Accueil'),
   songs('Titres'),
   albums('Albums'),
   artists('Artistes'),
@@ -34,7 +35,7 @@ class MusicPage extends StatefulWidget {
 }
 
 class _MusicPageState extends State<MusicPage> {
-  _Filter _filter = _Filter.songs;
+  _Filter _filter = _Filter.home;
   bool _searching = false;
   String _query = '';
 
@@ -161,6 +162,11 @@ class _MusicPageState extends State<MusicPage> {
         ),
         Expanded(
           child: switch (_filter) {
+            _Filter.home => _Home(
+              music: music,
+              settings: settings,
+              onSeeAll: (f) => setState(() => _filter = f),
+            ),
             _Filter.songs => SongList(
               songs: music.sortedSongs(settings.musicSort),
               sortLabel: _sortLabels[settings.musicSort],
@@ -810,6 +816,243 @@ class PlaylistPage extends StatelessWidget {
         songs: songs,
         emptyText: 'Playlist vide. Ajoutez des titres depuis leur menu ⋮.',
         onRemove: (s) => settings.removeFromPlaylist(id, s.id),
+      ),
+    );
+  }
+}
+
+/// Landing tab: what to resume, the user's playlists and the latest additions.
+class _Home extends StatelessWidget {
+  const _Home({
+    required this.music,
+    required this.settings,
+    required this.onSeeAll,
+  });
+  final MusicController music;
+  final AppSettings settings;
+  final ValueChanged<_Filter> onSeeAll;
+
+  @override
+  Widget build(BuildContext context) {
+    final byId = {for (final s in music.songs) s.id: s};
+    final recent = [
+      for (final id in settings.recentSongs)
+        if (byId[id] != null) byId[id]!,
+    ];
+    // Mode 1 is "recently added", already cached for the whole library.
+    final added = music.sortedSongs(1);
+    final favorites = [
+      for (final s in music.sortedSongs(0))
+        if (settings.isFavorite(s.id)) s,
+    ];
+    final playlists = settings.playlists;
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 16),
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: () => music.shuffleAll(music.sortedSongs(0)),
+                  icon: const Icon(Icons.shuffle_rounded),
+                  label: const Text('Tout en aléatoire'),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (recent.isNotEmpty)
+          _Shelf(
+            title: 'Reprendre',
+            songs: recent.take(12).toList(),
+            onMore: () => onSeeAll(_Filter.recent),
+          ),
+        if (playlists.isNotEmpty) ...[
+          _ShelfTitle(
+            'Vos playlists',
+            onMore: () => onSeeAll(_Filter.playlists),
+          ),
+          SizedBox(
+            height: 112,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              children: [
+                for (final p in playlists)
+                  _PlaylistCard(
+                    name: p.name,
+                    count: p.songIds.length,
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => PlaylistPage(id: p.id),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+        if (favorites.isNotEmpty)
+          _Shelf(
+            title: 'Vos favoris',
+            songs: favorites.take(12).toList(),
+            onMore: () => onSeeAll(_Filter.favorites),
+          ),
+        _Shelf(
+          title: 'Ajoutés récemment',
+          songs: added.take(12).toList(),
+          onMore: () => onSeeAll(_Filter.songs),
+        ),
+      ],
+    );
+  }
+}
+
+class _ShelfTitle extends StatelessWidget {
+  const _ShelfTitle(this.title, {required this.onMore});
+  final String title;
+  final VoidCallback onMore;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 12, 4, 4),
+    child: Row(
+      children: [
+        Expanded(
+          child: Semantics(
+            header: true,
+            child: Text(
+              title,
+              style: Theme.of(context).textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w800),
+            ),
+          ),
+        ),
+        TextButton(onPressed: onMore, child: const Text('Tout voir')),
+      ],
+    ),
+  );
+}
+
+class _Shelf extends StatelessWidget {
+  const _Shelf({
+    required this.title,
+    required this.songs,
+    required this.onMore,
+  });
+  final String title;
+  final List<Song> songs;
+  final VoidCallback onMore;
+
+  @override
+  Widget build(BuildContext context) {
+    final music = context.read<MusicController>();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _ShelfTitle(title, onMore: onMore),
+        SizedBox(
+          // Cover, then two lines of text that grow with the system font.
+          height: 130 + 36 * MediaQuery.textScalerOf(context).scale(1),
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            itemCount: songs.length,
+            itemBuilder: (_, i) => SizedBox(
+              width: 120,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () => music.play(songs, i, shuffled: false),
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Artwork(songs[i], size: 112, radius: 10),
+                      const SizedBox(height: 6),
+                      Text(
+                        songs[i].title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      Text(
+                        songs[i].artist,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PlaylistCard extends StatelessWidget {
+  const _PlaylistCard({
+    required this.name,
+    required this.count,
+    required this.onTap,
+  });
+  final String name;
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.all(4),
+      child: Material(
+        color: scheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(16),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: SizedBox(
+            width: 140,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.queue_music_rounded,
+                    color: scheme.onSecondaryContainer,
+                  ),
+                  const Spacer(),
+                  Text(
+                    name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: scheme.onSecondaryContainer,
+                    ),
+                  ),
+                  Text(
+                    '$count titre${count > 1 ? 's' : ''}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: scheme.onSecondaryContainer,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
