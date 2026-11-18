@@ -120,7 +120,9 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
     }
     VideoPlayerController? controller;
     try {
-      controller = VideoPlayerController.contentUri(Uri.parse(clip.media.uri));
+      controller = clip.media.uri.startsWith('content:')
+          ? VideoPlayerController.contentUri(Uri.parse(clip.media.uri))
+          : VideoPlayerController.file(File(clip.media.path));
       // A file the player cannot open must not leave the spinner running.
       await controller.initialize().timeout(const Duration(seconds: 10));
       if (!mounted || _playerFor != index) {

@@ -437,24 +437,30 @@ class TaskTile extends StatelessWidget {
 }
 
 /// Bottom sheet to create or edit a task.
-Future<void> showTaskEditor(BuildContext context, [Task? existing]) {
+/// [draft] pre-fills a new task; [existing] edits a saved one.
+Future<void> showTaskEditor(
+  BuildContext context, [
+  Task? existing,
+  Task? draft,
+]) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-    builder: (_) => _TaskEditor(existing: existing),
+    builder: (_) => _TaskEditor(existing: existing, draft: draft),
   );
 }
 
 class _TaskEditor extends StatefulWidget {
-  const _TaskEditor({this.existing});
+  const _TaskEditor({this.existing, this.draft});
   final Task? existing;
+  final Task? draft;
 
   @override
   State<_TaskEditor> createState() => _TaskEditorState();
 }
 
 class _TaskEditorState extends State<_TaskEditor> {
-  late final Task _task = widget.existing ?? Task(title: '');
+  late final Task _task = widget.existing ?? widget.draft ?? Task(title: '');
   late final _title = TextEditingController(text: _task.title);
   late final _notes = TextEditingController(text: _task.notes);
   late DateTime? _due = _task.due;

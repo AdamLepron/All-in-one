@@ -30,8 +30,15 @@ class EqualizerPage extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Égaliseur'),
         actions: [
-          TextButton(onPressed: eq.reset, child: const Text('Réinitialiser')),
-          Switch(value: eq.enabled, onChanged: eq.setEnabled),
+          IconButton(
+            tooltip: 'Réinitialiser',
+            icon: const Icon(Icons.restart_alt_rounded),
+            onPressed: eq.reset,
+          ),
+          Semantics(
+            label: "Activer l'égaliseur",
+            child: Switch(value: eq.enabled, onChanged: eq.setEnabled),
+          ),
           const SizedBox(width: 12),
         ],
       ),

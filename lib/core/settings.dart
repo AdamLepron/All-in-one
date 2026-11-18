@@ -12,6 +12,17 @@ const accentChoices = <Color>[
   Color(0xFF12A594), // teal
 ];
 
+/// Names of [accentChoices], for screen readers.
+const accentNames = <String>[
+  'indigo',
+  'verte',
+  'bleue',
+  'rouge',
+  'orange',
+  'rose',
+  'turquoise',
+];
+
 const defaultPinned = [
   'notes',
   'calculator',
@@ -153,6 +164,32 @@ class AppSettings extends ChangeNotifier {
   List<String> list(String key) => _prefs.getStringList(key) ?? const [];
   void setList(String key, List<String> value) =>
       _set(() => _prefs.setStringList(key, value));
+
+  /// Every saved preference, for backups. Values are bool, int, double,
+  /// String or a list of strings.
+  Map<String, Object?> exportPrefs() => {
+    for (final key in _prefs.getKeys()) key: _prefs.get(key),
+  };
+
+  /// Replaces all preferences by [values] (as given by [exportPrefs]).
+  Future<void> replacePrefs(Map<String, Object?> values) async {
+    await _prefs.clear();
+    for (final entry in values.entries) {
+      final v = entry.value;
+      if (v is bool) {
+        await _prefs.setBool(entry.key, v);
+      } else if (v is int) {
+        await _prefs.setInt(entry.key, v);
+      } else if (v is double) {
+        await _prefs.setDouble(entry.key, v);
+      } else if (v is String) {
+        await _prefs.setString(entry.key, v);
+      } else if (v is List) {
+        await _prefs.setStringList(entry.key, [for (final e in v) '$e']);
+      }
+    }
+    notifyListeners();
+  }
 
   /// Free-form storage for modules that serialise their own state.
   String? raw(String key) => _prefs.getString(key);

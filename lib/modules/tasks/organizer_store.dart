@@ -327,6 +327,56 @@ class OrganizerStore extends ChangeNotifier {
     await _reload();
   }
 
+  // ---- Backup ----
+
+  /// Every task and event as plain maps, for backups.
+  Map<String, List<Map<String, Object?>>> exportData() => {
+    'tasks': [for (final t in tasks) t.toMap()],
+    'events': [for (final e in events) e.toMap()],
+  };
+
+  /// Replaces all tasks and events (as given by [exportData]) and arms
+  /// the reminders again.
+  Future<void> replaceAll({
+    required List<Map<String, Object?>> taskRows,
+    required List<Map<String, Object?>> eventRows,
+  }) async {
+    final newTasks = [
+      for (final r in taskRows) Task.fromMap(r),
+    ]; // validates first
+    final newEvents = [for (final r in eventRows) Event.fromMap(r)];
+    for (final t in tasks) {
+      await Reminders.cancel(_taskReminderId(t));
+    }
+    for (final e in events) {
+      await Reminders.cancel(_eventReminderId(e));
+    }
+    await _db.transaction((txn) async {
+      await txn.delete('tasks');
+      await txn.delete('events');
+      for (final t in newTasks) {
+        await txn.insert('tasks', t.toMap());
+      }
+      for (final e in newEvents) {
+        await txn.insert('events', e.toMap());
+      }
+    });
+    await _reload();
+    for (final t in tasks) {
+      if (t.hasTime && !t.done && t.due != null) {
+        await Reminders.schedule(
+          _taskReminderId(t),
+          t.title,
+          'Tâche à faire',
+          t.due!,
+        );
+      }
+    }
+    for (final e in events) {
+      await _scheduleEvent(e);
+    }
+  }
+
   // ---- Events ----
 
   /// Occurrences of every event that touch [from, to), repeats expanded,

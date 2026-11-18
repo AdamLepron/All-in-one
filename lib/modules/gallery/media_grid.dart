@@ -92,6 +92,57 @@ class MediaSelection extends ChangeNotifier {
 
 /// Timeline grid grouped by day with sticky date headers. Pinch to change
 /// the number of columns.
+/// One line of the timeline: a day heading, or a row of thumbnails.
+class TimelineLine {
+  const TimelineLine.header(this.label) : start = 0, end = 0;
+  const TimelineLine.cells(this.label, this.start, this.end);
+
+  /// Day label, also used for the heading that stays at the top.
+  final String label;
+
+  /// Range [start, end) of the items shown on a row.
+  final int start;
+  final int end;
+
+  bool get isHeader => start == end;
+}
+
+const _gap = 2.0;
+const _headerHeight = 44.0;
+
+/// Splits [items] (newest first) into heading and thumbnail lines for
+/// [columns] columns. Computed once per change, not per frame.
+@visibleForTesting
+List<TimelineLine> buildTimeline(List<Media> items, int columns) {
+  final lines = <TimelineLine>[];
+  var i = 0;
+  while (i < items.length) {
+    final label = dayLabel(items[i].date);
+    var end = i;
+    while (end < items.length && dayLabel(items[end].date) == label) {
+      end++;
+    }
+    lines.add(TimelineLine.header(label));
+    for (var row = i; row < end; row += columns) {
+      lines.add(
+        TimelineLine.cells(
+          label,
+          row,
+          row + columns < end ? row + columns : end,
+        ),
+      );
+    }
+    i = end;
+  }
+  return lines;
+}
+
+/// Timeline grouped by day, with the current day's heading kept at the top.
+/// Pinch to change the number of columns.
+///
+/// It is one flat list with known line heights rather than one scrollable
+/// section per day: with tens of thousands of photos, laying out a thousand
+/// sections on every frame made scrolling stutter.
 class MediaGrid extends StatefulWidget {
   const MediaGrid({super.key, required this.items, required this.selection});
   final List<Media> items;
@@ -102,18 +153,62 @@ class MediaGrid extends StatefulWidget {
 }
 
 class _MediaGridState extends State<MediaGrid> {
+  final _controller = ScrollController();
+  final _sticky = ValueNotifier<String>('');
+
+  List<TimelineLine> _lines = const [];
+  List<Media>? _linesFor;
+  int _linesColumns = 0;
+
+  /// Start offset of each line, plus the total at the end.
+  List<double> _offsets = const [0];
+  double _offsetsWidth = -1;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_updateSticky);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _sticky.dispose();
+    super.dispose();
+  }
+
+  double _extent(int line, double cell) =>
+      _lines[line].isHeader ? _headerHeight : cell + _gap;
+
+  void _updateSticky() {
+    if (_lines.isEmpty) return;
+    final offset = _controller.hasClients ? _controller.offset : 0.0;
+    // Last line starting at or before the offset.
+    var low = 0;
+    var high = _lines.length - 1;
+    while (low < high) {
+      final mid = (low + high + 1) ~/ 2;
+      if (_offsets[mid] <= offset) {
+        low = mid;
+      } else {
+        high = mid - 1;
+      }
+    }
+    final label = _lines[low].label;
+    if (_sticky.value != label) _sticky.value = label;
+  }
+
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<AppSettings>();
     final columns = settings.galleryColumns;
     final scheme = Theme.of(context).colorScheme;
 
-    // Consecutive items of the same day form one group.
-    final groups = <(String, List<int>)>[];
-    for (var i = 0; i < widget.items.length; i++) {
-      final label = dayLabel(widget.items[i].date);
-      if (groups.isEmpty || groups.last.$1 != label) groups.add((label, []));
-      groups.last.$2.add(i);
+    if (!identical(_linesFor, widget.items) || _linesColumns != columns) {
+      _lines = buildTimeline(widget.items, columns);
+      _linesFor = widget.items;
+      _linesColumns = columns;
+      _offsetsWidth = -1;
     }
 
     return PinchDetector(
@@ -121,40 +216,107 @@ class _MediaGridState extends State<MediaGrid> {
         if (scale > 1.25 && columns > 2) settings.galleryColumns = columns - 1;
         if (scale < 0.8 && columns < 7) settings.galleryColumns = columns + 1;
       },
-      child: ListenableBuilder(
-        listenable: widget.selection,
-        builder: (context, _) => Scrollbar(
-          interactive: true,
-          thickness: 6,
-          radius: const Radius.circular(3),
-          child: CustomScrollView(
-            slivers: [
-              for (final (label, indexes) in groups)
-                SliverMainAxisGroup(
-                  slivers: [
-                    SliverPersistentHeader(
-                      pinned: true,
-                      delegate: _DayHeader(
-                        label,
-                        scheme.surface,
-                        scheme.onSurface,
+      child: LayoutBuilder(
+        builder: (context, box) {
+          final cell = (box.maxWidth - (columns - 1) * _gap) / columns;
+          if (_offsetsWidth != box.maxWidth) {
+            var sum = 0.0;
+            _offsets = [
+              for (var i = 0; i < _lines.length; i++)
+                () {
+                  final start = sum;
+                  sum += _extent(i, cell);
+                  return start;
+                }(),
+              sum,
+            ];
+            _offsetsWidth = box.maxWidth;
+            WidgetsBinding.instance.addPostFrameCallback(
+              (_) => _updateSticky(),
+            );
+          }
+          return Stack(
+            children: [
+              ListenableBuilder(
+                listenable: widget.selection,
+                builder: (context, _) => Scrollbar(
+                  controller: _controller,
+                  interactive: true,
+                  thickness: 6,
+                  radius: const Radius.circular(3),
+                  child: CustomScrollView(
+                    controller: _controller,
+                    slivers: [
+                      SliverVariedExtentList.builder(
+                        itemCount: _lines.length,
+                        itemExtentBuilder: (i, _) => _extent(i, cell),
+                        itemBuilder: (context, i) =>
+                            _line(context, _lines[i], cell),
                       ),
-                    ),
-                    SliverGrid.builder(
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: columns,
-                        mainAxisSpacing: 2,
-                        crossAxisSpacing: 2,
-                      ),
-                      itemCount: indexes.length,
-                      itemBuilder: (_, i) => _cell(context, indexes[i]),
-                    ),
-                  ],
+                      const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                    ],
+                  ),
                 ),
-              const SliverToBoxAdapter(child: SizedBox(height: 24)),
+              ),
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: IgnorePointer(
+                  child: ValueListenableBuilder<String>(
+                    valueListenable: _sticky,
+                    builder: (_, label, _) => Container(
+                      height: _headerHeight,
+                      color: scheme.surface.withValues(alpha: 0.94),
+                      alignment: Alignment.centerLeft,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        label,
+                        style: TextStyle(
+                          fontFamily: 'Roboto',
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: scheme.onSurface,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _line(BuildContext context, TimelineLine line, double cell) {
+    if (line.isHeader) {
+      // The heading kept at the top covers this one when they meet.
+      return Container(
+        height: _headerHeight,
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Text(
+          line.label,
+          style: TextStyle(
+            fontFamily: 'Roboto',
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            color: Theme.of(context).colorScheme.onSurface,
           ),
         ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: _gap),
+      child: Row(
+        children: [
+          for (var i = line.start; i < line.end; i++) ...[
+            if (i > line.start) const SizedBox(width: _gap),
+            SizedBox(width: cell, height: cell, child: _cell(context, i)),
+          ],
+        ],
       ),
     );
   }
@@ -164,7 +326,13 @@ class _MediaGridState extends State<MediaGrid> {
     final selection = widget.selection;
     final selected = selection.keys.contains(media.key);
     final scheme = Theme.of(context).colorScheme;
-    return GestureDetector(
+    return Semantics(
+      label:
+          '${media.video ? 'Vidéo' : 'Photo'} du ${dayLabel(media.date).toLowerCase()}${media.video ? ', ${formatDuration(media.duration)}' : ''}',
+      button: true,
+      image: true,
+      selected: selected,
+      excludeSemantics: true,
       onTap: () {
         if (selection.active) {
           selection.toggle(media);
@@ -177,74 +345,51 @@ class _MediaGridState extends State<MediaGrid> {
           );
         }
       },
-      onLongPress: () {
-        HapticFeedback.selectionClick();
-        selection.toggle(media);
-      },
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          AnimatedPadding(
-            duration: const Duration(milliseconds: 120),
-            padding: EdgeInsets.all(selected ? 8 : 0),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(selected ? 8 : 0),
-              child: MediaThumb(media),
-            ),
-          ),
-          if (selection.active)
-            Positioned(
-              left: 4,
-              top: 4,
-              child: Icon(
-                selected ? Icons.check_circle : Icons.circle_outlined,
-                size: 22,
-                color: selected ? scheme.primary : Colors.white,
-                shadows: const [Shadow(blurRadius: 4, color: Colors.black54)],
+      onLongPress: () => selection.toggle(media),
+      child: GestureDetector(
+        onTap: () {
+          if (selection.active) {
+            selection.toggle(media);
+          } else {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) =>
+                    ViewerPage(items: widget.items, initialIndex: index),
+              ),
+            );
+          }
+        },
+        onLongPress: () {
+          HapticFeedback.selectionClick();
+          selection.toggle(media);
+        },
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            AnimatedPadding(
+              duration: const Duration(milliseconds: 120),
+              padding: EdgeInsets.all(selected ? 8 : 0),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(selected ? 8 : 0),
+                child: MediaThumb(media),
               ),
             ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DayHeader extends SliverPersistentHeaderDelegate {
-  _DayHeader(this.label, this.background, this.foreground);
-  final String label;
-  final Color background;
-  final Color foreground;
-
-  @override
-  double get minExtent => 44;
-  @override
-  double get maxExtent => 44;
-
-  @override
-  Widget build(
-    BuildContext context,
-    double shrinkOffset,
-    bool overlapsContent,
-  ) {
-    return Container(
-      color: background.withValues(alpha: 0.94),
-      alignment: Alignment.centerLeft,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontFamily: 'Roboto',
-          fontSize: 15,
-          fontWeight: FontWeight.w700,
-          color: foreground,
+            if (selection.active)
+              Positioned(
+                left: 4,
+                top: 4,
+                child: Icon(
+                  selected ? Icons.check_circle : Icons.circle_outlined,
+                  size: 22,
+                  color: selected ? scheme.primary : Colors.white,
+                  shadows: const [Shadow(blurRadius: 4, color: Colors.black54)],
+                ),
+              ),
+          ],
         ),
       ),
     );
   }
-
-  @override
-  bool shouldRebuild(_DayHeader old) =>
-      old.label != label || old.background != background;
 }
 
 Future<void> shareMedia(List<Media> items) => SharePlus.instance.share(

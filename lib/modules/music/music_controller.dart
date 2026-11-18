@@ -22,7 +22,26 @@ class MusicController extends ChangeNotifier {
   final AppSettings settings;
 
   LibraryStatus status = LibraryStatus.unknown;
-  List<Song> songs = [];
+  List<Song> _songs = [];
+  List<Song> get songs => _songs;
+  set songs(List<Song> value) {
+    _songs = value;
+    _sortedCache.clear();
+    _albums = null;
+    _artists = null;
+  }
+
+  // Sorting or grouping tens of thousands of songs on every rebuild would
+  // make the screen stutter, so the results are kept until the library changes.
+  final _sortedCache = <int, List<Song>>{};
+  List<SongGroup>? _albums;
+  List<SongGroup>? _artists;
+
+  List<Song> sortedSongs(int mode) =>
+      _sortedCache.putIfAbsent(mode, () => sortSongs(_songs, mode));
+
+  List<SongGroup> get albums => _albums ??= groupByAlbum(_songs);
+  List<SongGroup> get artists => _artists ??= groupByArtist(_songs);
 
   AudioPlayer? _player;
   final _subscriptions = <StreamSubscription<void>>[];

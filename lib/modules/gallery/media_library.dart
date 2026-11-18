@@ -65,12 +65,23 @@ enum MediaStatus { unknown, loading, denied, ready }
 /// Photos and videos of the device, most recent first.
 class MediaLibrary extends ChangeNotifier {
   MediaStatus status = MediaStatus.unknown;
-  List<Media> items = [];
+  List<Media> _items = [];
+  List<Media> get items => _items;
+  set items(List<Media> value) {
+    _items = value;
+    _videos = null;
+    _albums = null;
+  }
 
-  List<Media> get videos => items.where((m) => m.video).toList();
+  List<Media>? _videos;
+  List<MediaAlbum>? _albums;
+
+  List<Media> get videos => _videos ??= _items.where((m) => m.video).toList();
 
   /// Albums ordered by their most recent item.
-  List<MediaAlbum> get albums {
+  List<MediaAlbum> get albums => _albums ??= _buildAlbums();
+
+  List<MediaAlbum> _buildAlbums() {
     final map = <String, List<Media>>{};
     for (final m in items) {
       map.putIfAbsent(m.album, () => []).add(m);

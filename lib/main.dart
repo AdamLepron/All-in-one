@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
+import 'core/crash_log.dart';
 import 'core/notifications.dart';
 import 'core/settings.dart';
 import 'core/theme.dart';
@@ -20,6 +21,8 @@ import 'shell/app_shell.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await CrashLog.init();
+  CrashLog.install();
   final settings = await AppSettings.load();
   final notes = await NotesStore.open();
   await Reminders.init();

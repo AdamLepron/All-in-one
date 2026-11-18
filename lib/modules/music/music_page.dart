@@ -45,26 +45,6 @@ class _MusicPageState extends State<MusicPage> {
     }
   }
 
-  List<Song> _sorted(List<Song> songs, int sort) {
-    final list = [...songs];
-    switch (sort) {
-      case 1:
-        list.sort((a, b) => b.dateAdded.compareTo(a.dateAdded));
-      case 2:
-        list.sort((a, b) {
-          final c = a.artist.toLowerCase().compareTo(b.artist.toLowerCase());
-          return c != 0
-              ? c
-              : a.title.toLowerCase().compareTo(b.title.toLowerCase());
-        });
-      default:
-        list.sort(
-          (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
-        );
-    }
-    return list;
-  }
-
   @override
   Widget build(BuildContext context) {
     final music = context.watch<MusicController>();
@@ -180,17 +160,17 @@ class _MusicPageState extends State<MusicPage> {
         Expanded(
           child: switch (_filter) {
             _Filter.songs => SongList(
-              songs: _sorted(music.songs, settings.musicSort),
+              songs: music.sortedSongs(settings.musicSort),
               sortLabel: _sortLabels[settings.musicSort],
               onSort: () => _showSort(settings),
             ),
-            _Filter.albums => _AlbumGrid(groupByAlbum(music.songs)),
-            _Filter.artists => _ArtistList(groupByArtist(music.songs)),
+            _Filter.albums => _AlbumGrid(music.albums),
+            _Filter.artists => _ArtistList(music.artists),
             _Filter.favorites => SongList(
-              songs: _sorted(
-                music.songs.where((s) => settings.isFavorite(s.id)).toList(),
-                0,
-              ),
+              songs: [
+                for (final s in music.sortedSongs(0))
+                  if (settings.isFavorite(s.id)) s,
+              ],
               emptyText: 'Touchez le cœur sur l\'écran de lecture pour ajouter un favori.',
             ),
             _Filter.recent => SongList(
@@ -279,8 +259,8 @@ class SongList extends StatelessWidget {
                       InkWell(
                         borderRadius: BorderRadius.circular(8),
                         onTap: onSort,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(minHeight: 48),
                           child: Row(
                             children: [
                               const Icon(Icons.swap_vert_rounded, size: 18),
@@ -313,13 +293,19 @@ class SongList extends StatelessWidget {
                       clipBehavior: Clip.antiAlias,
                       child: InkWell(
                         onTap: () => music.play(songs, 0, shuffled: false),
-                        child: const SizedBox(
-                          width: 52,
-                          height: 52,
-                          child: Icon(
-                            Icons.play_arrow_rounded,
-                            size: 34,
-                            color: Colors.black,
+                        // Spoken by screen readers; there is no visible text.
+                        child: Semantics(
+                          label: 'Tout lire',
+                          button: true,
+                          excludeSemantics: true,
+                          child: const SizedBox(
+                            width: 52,
+                            height: 52,
+                            child: Icon(
+                              Icons.play_arrow_rounded,
+                              size: 34,
+                              color: Colors.black,
+                            ),
                           ),
                         ),
                       ),

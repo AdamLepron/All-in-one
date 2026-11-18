@@ -65,6 +65,9 @@ class ScanStore extends ChangeNotifier {
       p.join((await getApplicationDocumentsDirectory()).path, 'scans');
 
   final Future<String> Function() _directory;
+
+  /// Folder holding every scan.
+  Future<String> get rootDirectory => _directory();
   List<Scan> scans = [];
   bool loaded = false;
 

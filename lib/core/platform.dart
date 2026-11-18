@@ -104,6 +104,26 @@ class MediaChannel {
     }
   }
 
+  /// Content shared with the app that arrived before Dart was ready. Also
+  /// switches on live delivery: later shares call the handler set with
+  /// [onShared].
+  static Future<Map<Object?, Object?>?> takeShared() async {
+    try {
+      return await _channel.invokeMapMethod<Object?, Object?>('sharedContent');
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
+  /// Handler for content shared while the app runs.
+  static void onShared(void Function(Map<Object?, Object?> content) handler) {
+    _channel.setMethodCallHandler((call) async {
+      if (call.method == 'sharedArrived') {
+        handler((call.arguments as Map).cast<Object?, Object?>());
+      }
+    });
+  }
+
   /// Exports a montage and returns the path of the file. [args] is built by
   /// the video editor project. Throws a [PlatformException] on failure.
   static Future<String> exportVideo(Map<String, Object?> args) async =>

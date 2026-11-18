@@ -96,3 +96,25 @@ List<SongGroup> groupByArtist(List<Song> songs) {
       ),
   ]..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 }
+
+/// Sort modes of the library: 0 by title, 1 most recently added, 2 by
+/// artist then title.
+List<Song> sortSongs(List<Song> songs, int mode) {
+  final list = [...songs];
+  switch (mode) {
+    case 1:
+      list.sort((a, b) => b.dateAdded.compareTo(a.dateAdded));
+    case 2:
+      list.sort((a, b) {
+        final c = a.artist.toLowerCase().compareTo(b.artist.toLowerCase());
+        return c != 0
+            ? c
+            : a.title.toLowerCase().compareTo(b.title.toLowerCase());
+      });
+    default:
+      list.sort(
+        (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
+      );
+  }
+  return list;
+}

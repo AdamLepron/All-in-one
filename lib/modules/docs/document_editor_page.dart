@@ -23,7 +23,11 @@ class DocumentEditorPage extends StatefulWidget {
     this.path,
     this.directory = docsDirectory,
     this.fonts,
+    this.initialText,
   });
+
+  /// Text a new document starts with, for example shared from another app.
+  final String? initialText;
 
   /// Existing document, or null to write a new one.
   final String? path;
@@ -68,13 +72,17 @@ class _DocumentEditorPageState extends State<DocumentEditorPage> {
       }
     }
     if (!mounted) return;
-    _dirty = false;
+    // A new document may start with text received from another app.
+    final starting = path == null ? widget.initialText : null;
+    if (starting != null) _text.text = starting;
+    _dirty = starting != null;
     _lastText = _text.text;
     _history.reset();
     setState(() {
       _loaded = true;
       _stats = textStats(_text.text);
     });
+    if (starting != null) _save(); // keep the received text right away
     if (path == null) _focus.requestFocus();
   }
 

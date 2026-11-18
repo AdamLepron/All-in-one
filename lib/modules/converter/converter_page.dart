@@ -138,8 +138,11 @@ class _ConverterPageState extends State<ConverterPage> {
                     ),
                     InkWell(
                       onTap: value == null ? null : () => _copy(result),
-                      child: SizedBox(
-                        width: double.infinity,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          minWidth: double.infinity,
+                          minHeight: 48,
+                        ),
                         child: FittedBox(
                           fit: BoxFit.scaleDown,
                           alignment: Alignment.centerLeft,
@@ -170,11 +173,22 @@ class _ConverterPageState extends State<ConverterPage> {
               ListTile(
                 dense: true,
                 title: Text(unit.name),
-                trailing: Text(
-                  value == null
-                      ? '—'
-                      : '${formatNumber(convert(value, _from, unit))} ${unit.symbol}',
-                  style: text.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
+                trailing: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.sizeOf(context).width * 0.48,
+                  ),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      value == null
+                          ? '—'
+                          : '${formatNumber(convert(value, _from, unit))} ${unit.symbol}',
+                      style: text.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
                 ),
                 onTap: () => setState(() => _to = unit),
               ),
@@ -220,16 +234,18 @@ class _UnitPicker extends StatelessWidget {
           ),
         ),
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 48),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              '${value.name} (${value.symbol})',
-              style: TextStyle(
-                color: scheme.onSurfaceVariant,
-                fontWeight: FontWeight.w600,
+            Flexible(
+              child: Text(
+                '${value.name} (${value.symbol})',
+                style: TextStyle(
+                  color: scheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
             Icon(Icons.arrow_drop_down, color: scheme.onSurfaceVariant),

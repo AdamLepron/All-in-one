@@ -48,6 +48,9 @@ class RecorderController extends ChangeNotifier {
 
   Duration get elapsed => _clock.elapsed;
 
+  /// Folder holding every recording.
+  Future<String> get directory => _dir();
+
   Future<String> _dir() async {
     final dir = await _directory();
     await Directory(dir).create(recursive: true);

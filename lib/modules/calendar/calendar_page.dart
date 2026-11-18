@@ -196,22 +196,42 @@ class _CalendarPageState extends State<CalendarPage> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: Card(
-                child: ListTile(
-                  dense: true,
-                  leading: const Icon(Icons.sync),
-                  title: const Text('Afficher aussi les agendas du téléphone'),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      TextButton(
-                        onPressed: () => _loadDevice(request: true),
-                        child: const Text('Activer'),
+                      Row(
+                        children: [
+                          const Icon(Icons.sync),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Afficher aussi les agendas du téléphone',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                          ),
+                        ],
                       ),
-                      IconButton(
-                        tooltip: 'Masquer',
-                        icon: const Icon(Icons.close, size: 18),
-                        onPressed: () =>
-                            settings.setRaw('calendarPromptHidden', '1'),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            TextButton(
+                              onPressed: () => _loadDevice(request: true),
+                              child: const Text('Activer'),
+                            ),
+                            IconButton(
+                              tooltip: 'Masquer',
+                              icon: const Icon(Icons.close, size: 18),
+                              onPressed: () =>
+                                  settings.setRaw('calendarPromptHidden', '1'),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -226,7 +246,10 @@ class _CalendarPageState extends State<CalendarPage> {
 
   Widget _monthView(OrganizerStore store) {
     final scheme = Theme.of(context).colorScheme;
-    return Column(
+    // A scrolling page: with large system text the grid and the day's
+    // entries no longer fit one screen.
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 88),
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -248,80 +271,86 @@ class _CalendarPageState extends State<CalendarPage> {
             ],
           ),
         ),
-        SizedBox(
-          height: 6 * 52,
-          child: PageView.builder(
-            controller: _pager,
-            onPageChanged: (page) {
-              final month = _monthOf(page);
-              setState(() {
-                _month = month;
-                // Keep a day selected inside the visible month.
-                if (_selected.year != month.year ||
-                    _selected.month != month.month) {
-                  final now = dayOf(DateTime.now());
-                  _selected = now.year == month.year && now.month == month.month
-                      ? now
-                      : month;
-                }
-              });
-              if (_deviceAllowed) _loadDevice(request: false);
-            },
-            itemBuilder: (_, page) => _MonthGrid(
-              month: _monthOf(page),
-              selected: _selected,
-              onSelect: _goTo,
-              dotsFor: (day) {
-                final next = day.add(const Duration(days: 1));
-                return [
-                  for (final e in _eventsBetween(store, day, next).take(3))
-                    eventColor(e),
-                  if (store.tasksOn(day).isNotEmpty) scheme.outline,
-                ];
+        // The grid keeps a fixed size, so its text is not enlarged past 130 %.
+        MediaQuery.withClampedTextScaling(
+          maxScaleFactor: 1.3,
+          child: SizedBox(
+            height: 6 * 52,
+            child: PageView.builder(
+              controller: _pager,
+              onPageChanged: (page) {
+                final month = _monthOf(page);
+                setState(() {
+                  _month = month;
+                  // Keep a day selected inside the visible month.
+                  if (_selected.year != month.year ||
+                      _selected.month != month.month) {
+                    final now = dayOf(DateTime.now());
+                    _selected =
+                        now.year == month.year && now.month == month.month
+                        ? now
+                        : month;
+                  }
+                });
+                if (_deviceAllowed) _loadDevice(request: false);
               },
+              itemBuilder: (_, page) => _MonthGrid(
+                month: _monthOf(page),
+                selected: _selected,
+                onSelect: _goTo,
+                dotsFor: (day) {
+                  final next = day.add(const Duration(days: 1));
+                  return [
+                    for (final e in _eventsBetween(store, day, next).take(3))
+                      eventColor(e),
+                    if (store.tasksOn(day).isNotEmpty) scheme.outline,
+                  ];
+                },
+              ),
             ),
           ),
         ),
         const Divider(height: 1),
-        Expanded(child: _dayList(store, _selected, header: true)),
+        ..._dayEntries(store, _selected, header: true),
       ],
     );
   }
 
   /// Events and tasks of one day.
-  Widget _dayList(OrganizerStore store, DateTime day, {bool header = false}) {
+  List<Widget> _dayEntries(
+    OrganizerStore store,
+    DateTime day, {
+    bool header = false,
+  }) {
     final scheme = Theme.of(context).colorScheme;
     final events = _eventsBetween(store, day, day.add(const Duration(days: 1)));
     final tasks = store.tasksOn(day);
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 88),
-      children: [
-        if (header)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+    return [
+      if (header)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+          child: Text(
+            dayLabelLong(day),
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: scheme.primary,
+            ),
+          ),
+        ),
+      if (events.isEmpty && tasks.isEmpty)
+        Padding(
+          padding: const EdgeInsets.all(24),
+          child: Center(
             child: Text(
-              dayLabelLong(day),
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                color: scheme.primary,
-              ),
+              'Rien de prévu',
+              style: TextStyle(color: scheme.onSurfaceVariant),
             ),
           ),
-        if (events.isEmpty && tasks.isEmpty)
-          Padding(
-            padding: const EdgeInsets.all(24),
-            child: Center(
-              child: Text(
-                'Rien de prévu',
-                style: TextStyle(color: scheme.onSurfaceVariant),
-              ),
-            ),
-          ),
-        for (final e in events)
-          _EventTile(event: e, day: day, onTap: () => _edit(e)),
-        for (final t in tasks) TaskTile(t, dense: true),
-      ],
-    );
+        ),
+      for (final e in events)
+        _EventTile(event: e, day: day, onTap: () => _edit(e)),
+      for (final t in tasks) TaskTile(t, dense: true),
+    ];
   }
 
   Widget _agendaView(OrganizerStore store) {
@@ -448,7 +477,7 @@ class _MonthGrid extends StatelessWidget {
                                           ? scheme.onPrimary
                                           : inMonth
                                           ? scheme.onSurface
-                                          : scheme.outlineVariant,
+                                          : scheme.onSurfaceVariant,
                                     ),
                                   ),
                                 ),

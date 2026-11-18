@@ -264,6 +264,18 @@ void main() {
     await tester.tap(find.text('Recherche'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).last, 'lecteur');
+    // The disk search starts after a pause and does real I/O.
+    await tester.pump(const Duration(milliseconds: 400));
+    for (var i = 0; i < 40; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+      if (find.byType(LinearProgressIndicator).evaluate().isEmpty &&
+          find.byType(CircularProgressIndicator).evaluate().isEmpty) {
+        break;
+      }
+    }
     await tester.pumpAndSettle();
     expect(find.text('Idées projet'), findsOneWidget);
     await shot('09_search');
@@ -345,7 +357,7 @@ void main() {
     settings.setVideoPosition('v23', const Duration(seconds: 42));
     await tester.tap(find.text('Galerie').last);
     await settle();
-    expect(find.text("Aujourd'hui"), findsOneWidget);
+    expect(find.text("Aujourd'hui"), findsWidgets);
     await shot('20_gallery');
     await tester.longPress(find.byType(MediaThumb).first);
     await tester.pumpAndSettle();

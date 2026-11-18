@@ -2,6 +2,8 @@ package com.allinone.all_in_one
 
 import android.content.ContentUris
 import android.content.Context
+import android.content.Intent
+import android.os.Bundle
 import android.graphics.Bitmap
 import android.media.AudioManager
 import android.media.MediaScannerConnection
@@ -32,14 +34,28 @@ class MainActivity : AudioServiceActivity() {
     private val pdf = PdfDocuments()
     private val effects = AudioEffects()
     private val video by lazy { VideoExporter(this) }
+    private val intake by lazy { ShareIntake(this, executor, main) }
     private val tools by lazy { DeviceTools(this) }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // Not after a recreation (rotation): the intent was already read.
+        if (savedInstanceState == null) intake.handle(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        intake.handle(intent)
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         EventChannel(flutterEngine.dartExecutor.binaryMessenger, "allinone/orientation")
             .setStreamHandler(tools)
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "allinone/media")
-            .setMethodCallHandler { call, result ->
+        val media = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "allinone/media")
+        intake.channel = media
+        media.setMethodCallHandler { call, result ->
                 // Window and volume calls are instant and need the UI thread.
                 if (handleOnMainThread(call, result)) return@setMethodCallHandler
                 // Every other call touches disk, so none runs on the UI thread.
@@ -132,6 +148,7 @@ class MainActivity : AudioServiceActivity() {
                     call.argument<Double>("balance") ?: 0.0,
                 )
             )
+            "sharedContent" -> result.success(intake.take())
             "exportVideo" -> {
                 @Suppress("UNCHECKED_CAST")
                 video.export(call.arguments as Map<String, Any?>, result)

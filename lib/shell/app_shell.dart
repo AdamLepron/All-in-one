@@ -2,7 +2,10 @@ import 'package:material_ui/material_ui.dart';
 
 import '../core/modules.dart';
 import '../core/theme.dart';
+import '../core/platform.dart';
 import '../modules/calendar/event_editor_page.dart';
+import '../modules/share/incoming.dart';
+import '../modules/share/share_sheet.dart';
 import '../modules/docs/document_editor_page.dart';
 import '../modules/music/mini_player.dart';
 import '../modules/notes/notes_page.dart';
@@ -22,6 +25,22 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int _index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // Content shared with the app: while it runs, and what arrived before.
+    MediaChannel.onShared(_onShared);
+    MediaChannel.takeShared().then((content) {
+      if (content != null) _onShared(content);
+    });
+  }
+
+  void _onShared(Map<Object?, Object?> content) {
+    final incoming = Incoming.fromMap(content);
+    if (incoming == null || !mounted) return;
+    handleIncoming(context, incoming);
+  }
 
   static const _pages = <Widget>[
     HomePage(),

@@ -112,6 +112,25 @@ class NotesStore extends ChangeNotifier {
     await _reload();
   }
 
+  /// Every note as a plain map, for backups.
+  List<Map<String, Object?>> exportNotes() => [
+    for (final n in _notes) n.toMap(),
+  ];
+
+  /// Replaces all notes by [rows] (as given by [exportNotes]).
+  Future<void> replaceAll(List<Map<String, Object?>> rows) async {
+    final notes = [
+      for (final r in rows) Note.fromMap(r),
+    ]; // validates before deleting
+    await _db.transaction((txn) async {
+      await txn.delete('notes');
+      for (final n in notes) {
+        await txn.insert('notes', n.toMap());
+      }
+    });
+    await _reload();
+  }
+
   List<Note> search(String query) {
     final q = query.trim().toLowerCase();
     if (q.isEmpty) return const [];

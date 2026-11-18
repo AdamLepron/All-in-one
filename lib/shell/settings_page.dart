@@ -1,7 +1,10 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
+import '../core/crash_log.dart';
 import '../core/settings.dart';
+import '../modules/backup/backup_page.dart';
+import 'incidents_page.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -67,29 +70,64 @@ class SettingsPage extends StatelessWidget {
               runSpacing: 12,
               children: [
                 for (var i = 0; i < accentChoices.length; i++)
-                  InkWell(
-                    customBorder: const CircleBorder(),
+                  Semantics(
+                    label: 'Couleur ${accentNames[i]}',
+                    button: true,
+                    selected: settings.accentIndex == i,
+                    excludeSemantics: true,
                     onTap: () => settings.accentIndex = i,
-                    child: Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: accentChoices[i],
-                        shape: BoxShape.circle,
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: () => settings.accentIndex = i,
+                      child: Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: accentChoices[i],
+                          shape: BoxShape.circle,
+                        ),
+                        child: settings.accentIndex == i
+                            ? const Icon(Icons.check, color: Colors.white)
+                            : null,
                       ),
-                      child: settings.accentIndex == i
-                          ? const Icon(Icons.check, color: Colors.white)
-                          : null,
                     ),
                   ),
               ],
             ),
           ),
+          label('Données'),
+          ListTile(
+            leading: const Icon(Icons.backup_outlined),
+            title: const Text('Sauvegarde et restauration'),
+            subtitle: const Text('Notes, tâches, événements, réglages'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute<void>(builder: (_) => const BackupPage())),
+          ),
+          label('Diagnostic'),
+          ListTile(
+            leading: const Icon(Icons.bug_report_outlined),
+            title: const Text("Journal d'incidents"),
+            subtitle: Text(
+              CrashLog.count == 0
+                  ? 'Aucun incident'
+                  : '${CrashLog.count} incident${CrashLog.count > 1 ? 's' : ''} enregistré${CrashLog.count > 1 ? 's' : ''}',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const IncidentsPage()),
+              );
+              // The count may have changed (journal cleared).
+              if (context.mounted) (context as Element).markNeedsBuild();
+            },
+          ),
           label('À propos'),
           const ListTile(
             leading: Icon(Icons.info_outline),
             title: Text('All-in-One'),
-            subtitle: Text('Version 1.0.0 · Étape 10 : éditeur vidéo'),
+            subtitle: Text('Version 1.1.0 · Fiabilité et socle'),
           ),
         ],
       ),

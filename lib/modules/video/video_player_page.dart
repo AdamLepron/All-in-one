@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
@@ -64,7 +65,9 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     MediaChannel.keepScreenOn(true);
     MediaChannel.brightness().then((v) => _brightness = v);
     MediaChannel.volume().then((v) => _volume = v);
-    _video = VideoPlayerController.contentUri(Uri.parse(widget.media.uri));
+    _video = widget.media.uri.startsWith('content:')
+        ? VideoPlayerController.contentUri(Uri.parse(widget.media.uri))
+        : VideoPlayerController.file(File(widget.media.path));
     _init();
   }
 

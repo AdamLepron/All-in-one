@@ -405,8 +405,40 @@ class _Key extends StatelessWidget {
   final VoidCallback? onLongPress;
   final bool compact;
 
+  /// What a screen reader says: symbols such as ÷ or ⌫ are not words.
+  static const _spoken = {
+    '÷': 'divisé par',
+    '×': 'multiplié par',
+    '−': 'moins',
+    '+': 'plus',
+    '=': 'égal',
+    '%': 'pourcentage',
+    '⌫': 'Effacer le dernier caractère',
+    'AC': 'Tout effacer',
+    '( )': 'Parenthèse',
+    ',': 'Virgule',
+    'π': 'Pi',
+    '√': 'Racine carrée',
+    '^': 'Puissance',
+    '!': 'Factorielle',
+    'ln': 'Logarithme népérien',
+    'log': 'Logarithme décimal',
+    'e': 'Constante e',
+  };
+
   @override
   Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: _spoken[label] ?? label,
+      excludeSemantics: true,
+      onTap: onPressed,
+      onLongPress: onLongPress,
+      child: _button(context),
+    );
+  }
+
+  Widget _button(BuildContext context) {
     return Material(
       color: colors.$1,
       borderRadius: BorderRadius.circular(compact ? 16 : 28),
