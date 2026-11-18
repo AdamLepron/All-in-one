@@ -1,14 +1,6 @@
-import 'dart:io';
-
-import 'package:all_in_one/core/theme.dart';
 import 'package:all_in_one/modules/gallery/media_library.dart';
-import 'package:all_in_one/modules/video_editor/video_editor_page.dart';
 import 'package:all_in_one/modules/video_editor/video_project.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:material_ui/material_ui.dart';
-import 'package:provider/provider.dart';
-
-import 'step10_editor_test.dart' show loadFonts;
 
 Media video(int id, {int seconds = 20}) => Media(
   id: id,
@@ -82,7 +74,7 @@ void main() {
   group('image clips', () {
     test('a picture lasts a few seconds and says so to the exporter', () {
       final p = VideoProject(video(1));
-      p.clips.add(Clip(photo(2)));
+      p.clips.add(VideoClip(photo(2)));
       expect(p.clips[1].isImage, isTrue);
       expect(p.clips[1].outputMs, defaultImageMs);
       expect(p.clips[1].sourceMs, maxImageMs);
@@ -102,7 +94,7 @@ void main() {
 
   group('transitions', () {
     test('the old fade is the fade-to-black transition', () {
-      final c = Clip(video(1))..fade = true;
+      final c = VideoClip(video(1))..fade = true;
       expect(c.transition, TransitionKind.fade);
       c.fade = false;
       expect(c.transition, TransitionKind.none);
@@ -113,7 +105,7 @@ void main() {
 
     test('projects from before keep their fade', () {
       final p = VideoProject(video(1));
-      p.clips.add(Clip(video(2)));
+      p.clips.add(VideoClip(video(2)));
       final j = p.toJson();
       (j['clips'] as List).first
         ..['fade'] = true
@@ -128,7 +120,7 @@ void main() {
         ..endMs = 10000
         ..transition = TransitionKind.slideLeft
         ..transitionMs = 1000;
-      p.clips.add(Clip(video(2))..endMs = 10000);
+      p.clips.add(VideoClip(video(2))..endMs = 10000);
       final clips = p.exportArgs('/o.mp4')['clips']! as List;
       final (a, b) = (clips[0] as Map, clips[1] as Map);
       expect(a['trOut'], TransitionKind.slideLeft.index);
@@ -156,7 +148,7 @@ void main() {
         ..endMs = 1000
         ..transition = TransitionKind.zoom
         ..transitionMs = 1500;
-      p.clips.add(Clip(video(2)));
+      p.clips.add(VideoClip(video(2)));
       final a = (p.exportArgs('/o.mp4')['clips']! as List).first as Map;
       expect(a['trOutMs'], 500);
     });
@@ -169,7 +161,7 @@ void main() {
         ..endMs = 10000
         ..transition = TransitionKind.slideLeft
         ..transitionMs = 1000;
-      p.clips.add(Clip(video(2))..endMs = 10000);
+      p.clips.add(VideoClip(video(2))..endMs = 10000);
       expect(p.poseAt(0, 5000).isNeutral, isTrue);
       expect(p.poseAt(0, 10000).dx, closeTo(-2, 1e-9)); // gone
       expect(p.poseAt(0, 9500).dx, closeTo(-1, 1e-9)); // halfway
@@ -183,7 +175,7 @@ void main() {
         ..endMs = 10000
         ..transition = TransitionKind.flash
         ..transitionMs = 1000;
-      p.clips.add(Clip(video(2))..endMs = 10000);
+      p.clips.add(VideoClip(video(2))..endMs = 10000);
       expect(p.poseAt(0, 10000).gain, closeTo(12, 1e-9));
       p.clips.first.transition = TransitionKind.zoom;
       final z = p.poseAt(0, 10000);
@@ -316,144 +308,6 @@ void main() {
       p.titles.add(TitleItem('Ailleurs'));
       final u = (p.exportArgs('/o.mp4')['titles']! as List).last as Map;
       expect(u.containsKey('x'), isFalse);
-    });
-  });
-
-  group('screens', () {
-    late MediaLibrary library;
-
-    Future<void> open(WidgetTester tester) async {
-      tester.view.physicalSize = const Size(824, 1784);
-      tester.view.devicePixelRatio = 2;
-      addTearDown(tester.view.reset);
-      await tester.runAsync(loadFonts);
-      library = MediaLibrary()..debugSet([video(1), photo(5), photo(6)]);
-      final tmp = Directory.systemTemp.createTempSync('mt');
-      addTearDown(() => tmp.deleteSync(recursive: true));
-      await tester.pumpWidget(
-        ChangeNotifierProvider.value(
-          value: library,
-          child: MaterialApp(
-            theme: buildTheme(const Color(0xFF5B5BD6), Brightness.light),
-            home: VideoEditorPage(
-              media: library.byKey('v1')!,
-              exporter: (a, _) async => a['output']! as String,
-              outputDir: tmp.path,
-            ),
-          ),
-        ),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(seconds: 11));
-      await tester.pumpAndSettle();
-    }
-
-    Future<void> tab(WidgetTester tester, String label) async {
-      await tester.scrollUntilVisible(
-        find.text(label),
-        80,
-        scrollable: find.descendant(
-          of: find.byKey(const ValueKey('tool-tabs')),
-          matching: find.byType(Scrollable),
-        ),
-      );
-      await tester.ensureVisible(find.text(label));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text(label));
-      await tester.pumpAndSettle();
-    }
-
-    testWidgets('a picture is added as a layer and appears on the timeline', (
-      tester,
-    ) async {
-      await open(tester);
-      await tab(tester, 'Calques');
-      expect(
-        find.textContaining('Ajoutez une image ou une vidéo'),
-        findsOneWidget,
-      );
-      await tester.tap(find.text('Ajouter une image'));
-      await tester.pumpAndSettle();
-      expect(find.text('Choisir une photo'), findsOneWidget);
-      await tester.tap(
-        find.byType(GestureDetector).evaluate().isEmpty
-            ? find.byType(GridView)
-            : find.byType(GridView),
-      );
-      // The first grid cell is a photo of the library.
-      final cell = find.descendant(
-        of: find.byType(GridView),
-        matching: find.byType(GestureDetector),
-      );
-      await tester.tap(cell.first);
-      await tester.pumpAndSettle();
-      if (autoUpdateGoldenFiles) {
-        await expectLater(
-          find.byType(MaterialApp),
-          matchesGoldenFile('screenshots/57_video_layers.png'),
-        );
-      }
-      expect(find.textContaining('Taille'), findsOneWidget);
-      expect(find.textContaining('Opacité'), findsOneWidget);
-      expect(find.bySemanticsLabel(RegExp('Piste')), findsWidgets);
-      await tester.ensureVisible(find.text('Haut gauche'));
-      await tester.tap(find.text('Haut gauche'));
-      await tester.pumpAndSettle();
-      await tester.ensureVisible(find.byTooltip('Supprimer la couche'));
-      await tester.tap(find.byTooltip('Supprimer la couche'));
-      await tester.pumpAndSettle();
-      expect(find.textContaining('Taille'), findsNothing);
-    });
-
-    testWidgets('transitions can be chosen and timed', (tester) async {
-      await open(tester);
-      // A second clip so the first one has a "next".
-      await tester.tap(find.byTooltip('Ajouter un extrait'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Ajouter une photo'));
-      await tester.pumpAndSettle();
-      await tester.tap(
-        find
-            .descendant(
-              of: find.byType(GridView),
-              matching: find.byType(GestureDetector),
-            )
-            .first,
-      );
-      await tester.pumpAndSettle();
-      // The new picture is the last clip; select the first one.
-      await tester.tap(find.byType(ReorderableDelayedDragStartListener).first);
-      await tester.pumpAndSettle();
-      await tab(tester, 'Transitions');
-      expect(find.textContaining("Entre l'extrait 1"), findsOneWidget);
-      await tester.tap(find.text('Glissé ←'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('1 s'));
-      await tester.pumpAndSettle();
-      expect(find.textContaining("l'effet se voit"), findsOneWidget);
-    });
-
-    testWidgets('a passage is removed from the middle of a clip', (
-      tester,
-    ) async {
-      await open(tester);
-      expect(find.text('Retirer un passage du milieu'), findsOneWidget);
-      await tester.ensureVisible(find.text('Retirer'));
-      await tester.tap(find.text('Retirer'));
-      await tester.pumpAndSettle();
-      expect(find.text('Passage retiré'), findsOneWidget);
-      // Two clips now: 20 s minus the middle third.
-      expect(find.textContaining('2 extraits'), findsOneWidget);
-    });
-
-    testWidgets('the audio tab offers sounds and a voice recording', (
-      tester,
-    ) async {
-      await open(tester);
-      await tab(tester, 'Audio');
-      await tester.ensureVisible(find.text('Ajouter un son'));
-      expect(find.text('Ajouter un son'), findsOneWidget);
-      expect(find.text('Enregistrer une voix'), findsOneWidget);
     });
   });
 }

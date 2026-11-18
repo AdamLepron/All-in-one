@@ -5,6 +5,10 @@ import '../gallery/media_library.dart';
 
 const speedChoices = <double>[0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4];
 
+/// Slowest and fastest speed a clip can be given.
+const minSpeed = 0.1;
+const maxSpeed = 8.0;
+
 /// Shortest clip that can be kept.
 const minClipMs = 500;
 
@@ -152,8 +156,8 @@ const defaultImageMs = 4000;
 
 /// A part of a video (or a still image shown for a while), with its own
 /// speed and rotation.
-class Clip {
-  Clip(
+class VideoClip {
+  VideoClip(
     this.media, {
     int? startMs,
     int? endMs,
@@ -274,7 +278,7 @@ class Clip {
 
   void rotateClockwise() => rotation = (rotation + 90) % 360;
 
-  Clip copy() => Clip(
+  VideoClip copy() => VideoClip(
     media,
     startMs: startMs,
     endMs: endMs,
@@ -301,6 +305,7 @@ class Clip {
     'rotation': rotation,
     'volume': volume,
     'fade': fade,
+    if (shownSize != null) ...{'w': shownSize!.width, 'h': shownSize!.height},
     'transition': transition.name,
     'transitionMs': transitionMs,
     'filter': filter.name,
@@ -312,7 +317,7 @@ class Clip {
     'flip': flip,
   };
 
-  static Clip fromJson(Map<String, dynamic> j) => Clip(
+  static VideoClip fromJson(Map<String, dynamic> j) => VideoClip(
     Media.fromJson(j['media'] as Map<String, dynamic>),
     startMs: j['start'] as int,
     endMs: j['end'] as int,
@@ -320,6 +325,9 @@ class Clip {
     rotation: j['rotation'] as int,
     volume: (j['volume'] as num?)?.toDouble() ?? 1,
     fade: j['fade'] as bool? ?? false,
+    shownSize: j['w'] is num && j['h'] is num
+        ? Size((j['w'] as num).toDouble(), (j['h'] as num).toDouble())
+        : null,
     transition: TransitionKind.values
         .where((t) => t.name == j['transition'])
         .firstOrNull,
@@ -413,6 +421,21 @@ class TitleItem {
   /// Text height as a fraction of the frame's height.
   double size;
   int color;
+
+  /// A copy with the same style, to be placed elsewhere in time.
+  TitleItem copyWith() => TitleItem(
+    text,
+    startMs: startMs,
+    endMs: endMs,
+    place: place,
+    size: size,
+    color: color,
+    align: align,
+    x: x,
+    y: y,
+    animation: animation,
+    box: box,
+  );
 
   Map<String, Object?> toJson() => {
     'text': text,
@@ -719,7 +742,7 @@ enum Aspect {
 /// A montage: clips played one after another, with optional audio changes.
 class VideoProject {
   VideoProject(Media first, {String? id})
-    : clips = [Clip(first)],
+    : clips = [VideoClip(first)],
       id = id ?? '${DateTime.now().microsecondsSinceEpoch}',
       created = DateTime.now(),
       name = first.name.replaceAll(RegExp(r'\.[^.]*$'), '');
@@ -730,7 +753,7 @@ class VideoProject {
   final String id;
   String name;
   final DateTime created;
-  final List<Clip> clips;
+  final List<VideoClip> clips;
   bool muteOriginal = false;
   String? musicPath;
   String? musicName;
@@ -753,6 +776,53 @@ class VideoProject {
   bool fillFrame = false;
 
   int get totalMs => clips.fold(0, (sum, c) => sum + c.outputMs);
+
+  /// The clip showing at [timeMs] of the finished video, and how far into
+  /// it (in finished-video milliseconds). The very end belongs to the last.
+  (int index, int offsetMs) locate(int timeMs) {
+    var start = 0;
+    for (var i = 0; i < clips.length; i++) {
+      final len = clips[i].outputMs;
+      if (timeMs < start + len || i == clips.length - 1) {
+        return (i, (timeMs - start).clamp(0, len));
+      }
+      start += len;
+    }
+    return (0, 0);
+  }
+
+  /// Cuts whichever clip is showing at [timeMs] in two. Returns the index of
+  /// the second part, or null when the cut would leave a part under 0.5 s.
+  int? splitAtTime(int timeMs) {
+    final (i, offset) = locate(timeMs);
+    final c = clips[i];
+    final source = c.startMs + (offset * c.speed).round();
+    return split(i, source) ? i + 1 : null;
+  }
+
+  /// Gives this montage the content of [other] (used by undo and redo).
+  void replaceWith(VideoProject other) {
+    name = other.name;
+    clips
+      ..clear()
+      ..addAll(other.clips);
+    titles
+      ..clear()
+      ..addAll(other.titles);
+    overlays
+      ..clear()
+      ..addAll(other.overlays);
+    sounds
+      ..clear()
+      ..addAll(other.sounds);
+    muteOriginal = other.muteOriginal;
+    musicPath = other.musicPath;
+    musicName = other.musicName;
+    musicVolume = other.musicVolume;
+    openingFade = other.openingFade;
+    aspect = other.aspect;
+    fillFrame = other.fillFrame;
+  }
 
   /// Frame of the finished video: the first clip's shape, scaled down to
   /// at most [maxExportSide] and with even sides, as video encoders need.
@@ -1009,7 +1079,7 @@ class VideoProject {
   static VideoProject fromJson(Map<String, dynamic> j) {
     final clips = [
       for (final c in j['clips'] as List)
-        Clip.fromJson(c as Map<String, dynamic>),
+        VideoClip.fromJson(c as Map<String, dynamic>),
     ];
     if (clips.isEmpty) throw const FormatException('Projet vide');
     return VideoProject._(

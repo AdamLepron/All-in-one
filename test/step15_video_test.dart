@@ -52,8 +52,10 @@ void main() {
       p.clips.first
         ..startMs = 0
         ..endMs = 10000;
-      p.clips.add(Clip(video(2), startMs: 0, endMs: 4000, speed: 2)); // 2 s
-      p.clips.add(Clip(video(3), startMs: 0, endMs: 6000));
+      p.clips.add(
+        VideoClip(video(2), startMs: 0, endMs: 4000, speed: 2),
+      ); // 2 s
+      p.clips.add(VideoClip(video(3), startMs: 0, endMs: 6000));
       expect(p.startOf(0), 0);
       expect(p.startOf(1), 10000);
       expect(p.startOf(2), 12000);
@@ -69,7 +71,7 @@ void main() {
         ..endMs = 10000
         ..volume = 1.5
         ..fade = true;
-      p.clips.add(Clip(video(2), startMs: 0, endMs: 10000));
+      p.clips.add(VideoClip(video(2), startMs: 0, endMs: 10000));
       p.openingFade = true;
       p.musicVolume = 0.3;
       p.titles
@@ -144,7 +146,7 @@ void main() {
         ..rotation = 90
         ..volume = 0.8
         ..fade = true;
-      p.clips.add(Clip(video(2)));
+      p.clips.add(VideoClip(video(2)));
       p
         ..muteOriginal = true
         ..musicPath = '/m/song.mp3'

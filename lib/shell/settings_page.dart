@@ -143,7 +143,7 @@ class SettingsPage extends StatelessWidget {
           const ListTile(
             leading: Icon(Icons.info_outline),
             title: Text('All-in-One'),
-            subtitle: Text('Version 2.2.0 · Montage multipistes'),
+            subtitle: Text('Version 3.0.0 · Éditeur vidéo façon CapCut'),
           ),
         ],
       ),

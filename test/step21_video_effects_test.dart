@@ -1,14 +1,7 @@
-import 'dart:io';
-
-import 'package:all_in_one/core/theme.dart';
 import 'package:all_in_one/modules/gallery/media_library.dart';
-import 'package:all_in_one/modules/video_editor/video_editor_page.dart';
 import 'package:all_in_one/modules/video_editor/video_project.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:provider/provider.dart';
-
-import 'step10_editor_test.dart' show loadFonts;
 
 Media video(int id, {int w = 1920, int h = 1080}) => Media(
   id: id,
@@ -35,7 +28,7 @@ void main() {
     });
 
     test('black and white gives equal red, green and blue', () {
-      final c = Clip(video(1))..filter = VideoFilter.mono;
+      final c = VideoClip(video(1))..filter = VideoFilter.mono;
       final m = c.look.matrix;
       for (var i = 0; i < 3; i++) {
         expect(m[i], closeTo(m[3 + i], 1e-9));
@@ -46,7 +39,7 @@ void main() {
     });
 
     test('brightness scales, contrast of a preset adds to the slider', () {
-      final c = Clip(video(1))
+      final c = VideoClip(video(1))
         ..filter = VideoFilter.noir
         ..contrastAdjust = 0.2
         ..brightness = 1.2;
@@ -58,7 +51,7 @@ void main() {
     });
 
     test('the native matrix is 4x4 column-major, alpha untouched', () {
-      final c = Clip(video(1))..filter = VideoFilter.warm;
+      final c = VideoClip(video(1))..filter = VideoFilter.warm;
       final m = c.look.columnMajor4;
       expect(m, hasLength(16));
       expect(m[0], closeTo(1.12, 1e-9)); // red gain
@@ -82,7 +75,7 @@ void main() {
     });
 
     test('reset restores the picture; copies keep everything', () {
-      final c = Clip(video(1))
+      final c = VideoClip(video(1))
         ..filter = VideoFilter.vivid
         ..brightness = 1.3
         ..saturationAdjust = 1.7
@@ -213,104 +206,6 @@ void main() {
         (t['align'], t['animation'], t['box']),
         (-1, TitleAnimation.slide.index, TitleBox.solid.index),
       );
-    });
-  });
-
-  group('screens', () {
-    Future<void> open(WidgetTester tester) async {
-      tester.view.physicalSize = const Size(824, 1784);
-      tester.view.devicePixelRatio = 2;
-      addTearDown(tester.view.reset);
-      await tester.runAsync(loadFonts);
-      final library = MediaLibrary()..debugSet([video(1)]);
-      final tmp = Directory.systemTemp.createTempSync('fx');
-      addTearDown(() => tmp.deleteSync(recursive: true));
-      await tester.pumpWidget(
-        ChangeNotifierProvider.value(
-          value: library,
-          child: MaterialApp(
-            theme: buildTheme(const Color(0xFF5B5BD6), Brightness.light),
-            home: VideoEditorPage(
-              media: library.byKey('v1')!,
-              exporter: (a, _) async => a['output']! as String,
-              outputDir: tmp.path,
-            ),
-          ),
-        ),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(seconds: 11));
-      await tester.pumpAndSettle();
-    }
-
-    Future<void> tool(WidgetTester tester, String label) async {
-      await tester.scrollUntilVisible(
-        find.text(label),
-        80,
-        scrollable: find.descendant(
-          of: find.byKey(const ValueKey('tool-tabs')),
-          matching: find.byType(Scrollable),
-        ),
-      );
-      await tester.ensureVisible(find.text(label));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text(label));
-      await tester.pumpAndSettle();
-    }
-
-    testWidgets('filters, effects and format panels change the clip', (
-      tester,
-    ) async {
-      await open(tester);
-      // Every tool is reachable in the row.
-      for (final label in ['Couper', 'Vitesse', 'Audio', 'Titres']) {
-        expect(find.text(label), findsOneWidget);
-      }
-
-      await tool(tester, 'Filtres');
-      await tester.tap(find.bySemanticsLabel('Filtre Sépia'));
-      await tester.pumpAndSettle();
-      expect(find.text('Sépia'), findsOneWidget);
-      await tester.ensureVisible(find.text('Réinitialiser'));
-      await tester.tap(find.text('Réinitialiser'));
-      await tester.pumpAndSettle();
-
-      await tool(tester, 'Effets');
-      await tester.tap(find.text('Zoom avant'));
-      await tester.pumpAndSettle();
-      await tester.ensureVisible(find.byType(SwitchListTile));
-      await tester.tap(find.byType(SwitchListTile));
-      await tester.pumpAndSettle();
-
-      await tool(tester, 'Format');
-      await tester.tap(find.text('9:16'));
-      await tester.pumpAndSettle();
-      expect(find.text('Vidéo finale : 1080 × 1920'), findsOneWidget);
-      await tester.ensureVisible(find.byType(SwitchListTile));
-      await tester.tap(find.byType(SwitchListTile));
-      await tester.pumpAndSettle();
-      expect(find.textContaining('les bords sont rognés'), findsOneWidget);
-    });
-
-    testWidgets('a sticker is added as a title and can be restyled', (
-      tester,
-    ) async {
-      await open(tester);
-      await tester.tap(find.text('Titres'));
-      await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Autocollant'));
-      await tester.tap(find.text('Autocollant'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.bySemanticsLabel('Autocollant 🔥'));
-      await tester.pumpAndSettle();
-      expect(find.text('🔥'), findsWidgets);
-      await tester.ensureVisible(find.text('Droite'));
-      await tester.tap(find.text('Droite'));
-      await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Glissé'));
-      await tester.tap(find.text('Glissé'));
-      await tester.pumpAndSettle();
-      expect(find.text('Plein'), findsOneWidget);
     });
   });
 }

@@ -18,14 +18,14 @@ Media video(int id, {int seconds = 60, int w = 1920, int h = 1080}) => Media(
 
 void main() {
   test('a new clip covers the whole video', () {
-    final c = Clip(video(1, seconds: 90));
+    final c = VideoClip(video(1, seconds: 90));
     expect((c.startMs, c.endMs), (0, 90000));
     expect(c.keptMs, 90000);
     expect(c.outputMs, 90000);
   });
 
   test('trimming never crosses or leaves the video', () {
-    final c = Clip(video(1, seconds: 10));
+    final c = VideoClip(video(1, seconds: 10));
     c.setStart(4000);
     c.setEnd(7000);
     expect((c.startMs, c.endMs), (4000, 7000));
@@ -40,7 +40,7 @@ void main() {
   });
 
   test('speed changes the output length', () {
-    final c = Clip(video(1, seconds: 10))..setStart(2000);
+    final c = VideoClip(video(1, seconds: 10))..setStart(2000);
     expect(c.keptMs, 8000);
     c.speed = 2;
     expect(c.outputMs, 4000);
@@ -51,7 +51,7 @@ void main() {
   });
 
   test('rotation turns clockwise and swaps the frame', () {
-    final c = Clip(video(1, w: 1920, h: 1080));
+    final c = VideoClip(video(1, w: 1920, h: 1080));
     expect(c.orientedSize, const Size(1920, 1080));
     c.rotateClockwise();
     expect((c.rotation, c.orientedSize), (90, const Size(1080, 1920)));
@@ -68,8 +68,8 @@ void main() {
 
   test('project total, order and copies', () {
     final p = VideoProject(video(1, seconds: 10));
-    p.clips.add(Clip(video(2, seconds: 20))..speed = 2);
-    p.clips.add(Clip(video(3, seconds: 5)));
+    p.clips.add(VideoClip(video(2, seconds: 20))..speed = 2);
+    p.clips.add(VideoClip(video(3, seconds: 5)));
     expect(p.totalMs, 10000 + 10000 + 5000);
     p.move(2, 0);
     expect(p.clips.map((c) => c.media.id), [3, 1, 2]);
