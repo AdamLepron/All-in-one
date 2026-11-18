@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' show ImageFilter;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
@@ -54,6 +55,9 @@ enum _Tab {
   speed('Vitesse', Icons.speed_rounded),
   audio('Audio', Icons.music_note_rounded),
   titles('Titres', Icons.title_rounded),
+  filters('Filtres', Icons.auto_awesome_rounded),
+  effects('Effets', Icons.blur_on_rounded),
+  format('Format', Icons.crop_rounded),
   fades('Fondus', Icons.gradient_rounded);
 
   const _Tab(this.label, this.icon);
@@ -538,7 +542,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
                   child: Container(
                     constraints: const BoxConstraints(
                       minHeight: 120,
-                      maxHeight: 250,
+                      maxHeight: 270,
                     ),
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     child: SingleChildScrollView(
@@ -547,23 +551,131 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
                         _Tab.speed => _speedPanel(),
                         _Tab.audio => _audioPanel(),
                         _Tab.titles => _titlesPanel(),
+                        _Tab.filters => _filtersPanel(),
+                        _Tab.effects => _effectsPanel(),
+                        _Tab.format => _formatPanel(),
                         _Tab.fades => _fadesPanel(),
                       },
                     ),
                   ),
                 ),
-                NavigationBar(
-                  backgroundColor: const Color(0xFF17171C),
-                  selectedIndex: _tab.index,
-                  onDestinationSelected: (i) =>
-                      setState(() => _tab = _Tab.values[i]),
-                  destinations: [
-                    for (final t in _Tab.values)
-                      NavigationDestination(icon: Icon(t.icon), label: t.label),
-                  ],
-                ),
+                _tabBar(),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// The tools, in a row that scrolls sideways.
+  Widget _tabBar() {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: const Color(0xFF17171C),
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 64,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            children: [
+              for (final t in _Tab.values)
+                Semantics(
+                  button: true,
+                  selected: t == _tab,
+                  label: t.label,
+                  excludeSemantics: true,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: () => setState(() => _tab = t),
+                    child: SizedBox(
+                      width: 64,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 48,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              color: t == _tab
+                                  ? scheme.secondaryContainer
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Icon(
+                              t.icon,
+                              size: 22,
+                              color: t == _tab
+                                  ? scheme.onSecondaryContainer
+                                  : Colors.white70,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            t.label,
+                            maxLines: 1,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: t == _tab ? Colors.white : Colors.white70,
+                              fontWeight: t == _tab
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// The playing video with the clip's look, mirror, blur and the frame
+  /// shape of the montage, as close as the phone can show it live.
+  Widget _framedVideo(VideoPlayerController player) {
+    final c = _clip;
+    Widget video = AspectRatio(
+      aspectRatio: player.value.aspectRatio,
+      child: VideoPlayer(player),
+    );
+    final look = c.look;
+    if (!look.isNeutral) {
+      video = ColorFiltered(
+        colorFilter: ColorFilter.matrix(look.preview5x4),
+        child: video,
+      );
+    }
+    if (c.blur > 0) {
+      video = ImageFiltered(
+        imageFilter: ImageFilter.blur(
+          sigmaX: c.blur * 8,
+          sigmaY: c.blur * 8,
+          tileMode: TileMode.clamp,
+        ),
+        child: video,
+      );
+    }
+    video = RotatedBox(quarterTurns: c.rotation ~/ 90, child: video);
+    if (c.flip) video = Transform.flip(flipX: true, child: video);
+    final aspect = _project.aspect;
+    if (aspect == Aspect.original) return video;
+    final size = c.orientedSize;
+    final w = size.width <= 0 ? 16.0 : size.width;
+    final h = size.height <= 0 ? 9.0 : size.height;
+    return AspectRatio(
+      aspectRatio: aspect.ratio,
+      child: ClipRect(
+        child: ColoredBox(
+          color: Colors.black,
+          child: FittedBox(
+            fit: _project.fillFrame ? BoxFit.cover : BoxFit.contain,
+            child: SizedBox(width: w, height: h, child: video),
           ),
         ),
       ),
@@ -580,13 +692,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  RotatedBox(
-                    quarterTurns: _clip.rotation ~/ 90,
-                    child: AspectRatio(
-                      aspectRatio: player.value.aspectRatio,
-                      child: VideoPlayer(player),
-                    ),
-                  ),
+                  _framedVideo(player),
                   ValueListenableBuilder<VideoPlayerValue>(
                     valueListenable: player,
                     builder: (_, v, _) => AnimatedOpacity(
@@ -805,6 +911,100 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
     0xFF30A46C,
   ];
 
+  static const _stickers = [
+    '😀',
+    '😂',
+    '😍',
+    '😎',
+    '🥳',
+    '😮',
+    '😢',
+    '😡',
+    '❤️',
+    '🔥',
+    '⭐',
+    '✨',
+    '👍',
+    '👏',
+    '🎉',
+    '🎬',
+    '🎵',
+    '📍',
+    '☀️',
+    '🌙',
+    '🌈',
+    '🌸',
+    '🍕',
+    '🚗',
+    '➡️',
+    '⬅️',
+    '⬆️',
+    '⬇️',
+    '✅',
+    '❌',
+    '💯',
+    '🆕',
+  ];
+
+  /// Adds an emoji as a big title without backdrop, where the preview is.
+  Future<void> _addSticker() async {
+    final emoji = await showModalBottomSheet<String>(
+      context: context,
+      builder: (sheet) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 4,
+            runSpacing: 4,
+            children: [
+              for (final e in _stickers)
+                Semantics(
+                  button: true,
+                  label: 'Autocollant $e',
+                  excludeSemantics: true,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () => Navigator.pop(sheet, e),
+                    child: SizedBox(
+                      width: 56,
+                      height: 56,
+                      child: Center(
+                        child: Text(e, style: const TextStyle(fontSize: 30)),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (emoji == null || !mounted) return;
+    final total = _project.totalMs;
+    final at =
+        _project.startOf(_selected) +
+        (((_player?.value.position.inMilliseconds ?? _clip.startMs) -
+                    _clip.startMs) /
+                _clip.speed)
+            .round();
+    final start = at.clamp(0, total > 1000 ? total - 500 : 0);
+    _edit(() {
+      _project.titles.add(
+        TitleItem(
+          emoji,
+          startMs: start,
+          endMs: (start + 3000).clamp(start + 500, total),
+          place: TitlePlace.middle,
+          size: 0.16,
+          box: TitleBox.none,
+          animation: TitleAnimation.pop,
+        ),
+      );
+      _selectedTitle = _project.titles.length - 1;
+    });
+  }
+
   Widget _titlesPanel() {
     final titles = _project.titles;
     final total = _project.totalMs;
@@ -847,6 +1047,14 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
                       _selectedTitle = titles.length - 1;
                     });
                   },
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: FilledButton.tonalIcon(
+                  icon: const Icon(Icons.emoji_emotions_outlined),
+                  label: const Text('Autocollant'),
+                  onPressed: _addSticker,
                 ),
               ),
               for (final (i, t) in titles.indexed)
@@ -921,12 +1129,51 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
                   ('A', 0.04),
                   ('A+', 0.06),
                   ('A++', 0.09),
+                  ('A+++', 0.16),
                 ])
                   ChoiceChip(
                     showCheckmark: false,
                     label: Text(label),
                     selected: sel.size == size,
                     onSelected: (_) => _edit(() => sel.size = size),
+                  ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                for (final (label, a) in const [
+                  ('Gauche', -1),
+                  ('Milieu', 0),
+                  ('Droite', 1),
+                ])
+                  ChoiceChip(
+                    showCheckmark: false,
+                    label: Text(label),
+                    selected: sel.align == a,
+                    onSelected: (_) => _edit(() => sel.align = a),
+                  ),
+                for (final b in TitleBox.values)
+                  ChoiceChip(
+                    showCheckmark: false,
+                    label: Text(b.label),
+                    selected: sel.box == b,
+                    onSelected: (_) => _edit(() => sel.box = b),
+                  ),
+                for (final a in TitleAnimation.values)
+                  ChoiceChip(
+                    showCheckmark: false,
+                    avatar: a == TitleAnimation.none
+                        ? null
+                        : const Icon(Icons.animation_rounded, size: 16),
+                    label: Text(a.label),
+                    selected: sel.animation == a,
+                    onSelected: (_) => _edit(() => sel.animation = a),
                   ),
               ],
             ),
@@ -983,6 +1230,250 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
             ],
           ),
         ],
+      ],
+    );
+  }
+
+  Widget _slider({
+    required IconData icon,
+    required String label,
+    required double value,
+    required double min,
+    required double max,
+    required String shown,
+    required ValueChanged<double> onChanged,
+  }) {
+    return Row(
+      children: [
+        const SizedBox(width: 16),
+        Icon(icon, size: 20),
+        Expanded(
+          child: Slider(
+            min: min,
+            max: max,
+            divisions: 20,
+            label: shown,
+            semanticFormatterCallback: (_) => '$label $shown',
+            value: value.clamp(min, max),
+            onChanged: onChanged,
+          ),
+        ),
+        SizedBox(
+          width: 76,
+          child: Text(
+            '$label\n$shown',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 11),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _filtersPanel() {
+    final c = _clip;
+    return Column(
+      children: [
+        SizedBox(
+          height: 84,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            children: [
+              for (final f in VideoFilter.values)
+                Padding(
+                  padding: const EdgeInsets.only(right: 10),
+                  child: Semantics(
+                    button: true,
+                    selected: c.filter == f,
+                    label: 'Filtre ${f.label}',
+                    excludeSemantics: true,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(14),
+                      onTap: () => _edit(() => c.filter = f),
+                      child: SizedBox(
+                        width: 72,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              width: 48,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Color(f.swatch),
+                                    Color(f.swatch).withValues(alpha: 0.45),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                border: Border.all(
+                                  width: c.filter == f ? 3 : 1,
+                                  color: c.filter == f
+                                      ? Colors.white
+                                      : Colors.white24,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              f.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        _slider(
+          icon: Icons.light_mode_outlined,
+          label: 'Luminosité',
+          value: c.brightness,
+          min: 0.5,
+          max: 1.5,
+          shown: '${((c.brightness - 1) * 100).round()}',
+          onChanged: (v) => _edit(() => c.brightness = v),
+        ),
+        _slider(
+          icon: Icons.contrast_rounded,
+          label: 'Contraste',
+          value: c.contrastAdjust,
+          min: -0.5,
+          max: 0.5,
+          shown: '${(c.contrastAdjust * 200).round()}',
+          onChanged: (v) => _edit(() => c.contrastAdjust = v),
+        ),
+        _slider(
+          icon: Icons.palette_outlined,
+          label: 'Saturation',
+          value: c.saturationAdjust,
+          min: 0,
+          max: 2,
+          shown: '${((c.saturationAdjust - 1) * 100).round()}',
+          onChanged: (v) => _edit(() => c.saturationAdjust = v),
+        ),
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 8,
+          children: [
+            TextButton.icon(
+              icon: const Icon(Icons.restart_alt_rounded),
+              label: const Text('Réinitialiser'),
+              onPressed: () => _edit(c.resetLook),
+            ),
+            TextButton.icon(
+              icon: const Icon(Icons.done_all_rounded),
+              label: const Text('Appliquer à tous'),
+              onPressed: () {
+                _edit(() {
+                  for (final o in _project.clips) {
+                    o
+                      ..filter = c.filter
+                      ..brightness = c.brightness
+                      ..contrastAdjust = c.contrastAdjust
+                      ..saturationAdjust = c.saturationAdjust;
+                  }
+                });
+                showMessage(context, 'Look appliqué à tous les extraits');
+              },
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _effectsPanel() {
+    final c = _clip;
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              for (final e in ClipEffect.values)
+                ChoiceChip(
+                  showCheckmark: false,
+                  label: Text(e.label),
+                  selected: c.effect == e,
+                  onSelected: (_) => _edit(() => c.effect = e),
+                ),
+            ],
+          ),
+        ),
+        if (c.effect != ClipEffect.none)
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20),
+            child: Text(
+              "Le mouvement se voit dans la vidéo exportée, pas dans l'aperçu.",
+              style: TextStyle(fontSize: 11, color: Colors.white60),
+            ),
+          ),
+        _slider(
+          icon: Icons.blur_on_rounded,
+          label: 'Flou',
+          value: c.blur,
+          min: 0,
+          max: 1,
+          shown: '${(c.blur * 100).round()} %',
+          onChanged: (v) => _edit(() => c.blur = v),
+        ),
+        SwitchListTile(
+          dense: true,
+          secondary: const Icon(Icons.flip_rounded),
+          title: const Text('Miroir'),
+          subtitle: const Text('Retourne la vidéo de gauche à droite'),
+          value: c.flip,
+          onChanged: (v) => _edit(() => c.flip = v),
+        ),
+      ],
+    );
+  }
+
+  Widget _formatPanel() {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              for (final a in Aspect.values)
+                ChoiceChip(
+                  showCheckmark: false,
+                  label: Text(a.label),
+                  selected: _project.aspect == a,
+                  onSelected: (_) => _edit(() => _project.aspect = a),
+                ),
+            ],
+          ),
+        ),
+        SwitchListTile(
+          dense: true,
+          title: const Text('Remplir le cadre'),
+          subtitle: Text(
+            _project.fillFrame
+                ? 'La vidéo est agrandie, les bords sont rognés'
+                : 'La vidéo entière est visible, avec des bandes noires',
+          ),
+          value: _project.fillFrame,
+          onChanged: (v) => _edit(() => _project.fillFrame = v),
+        ),
+        Text(
+          'Vidéo finale : ${_project.outputSize.width.round()} × ${_project.outputSize.height.round()}',
+          style: const TextStyle(fontSize: 12, color: Colors.white70),
+        ),
       ],
     );
   }

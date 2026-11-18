@@ -3,6 +3,7 @@ package com.allinone.all_in_one
 import android.app.Activity
 import android.net.Uri
 import android.graphics.Color
+import android.graphics.Matrix
 import android.text.SpannableString
 import android.text.Spanned
 import android.text.style.AbsoluteSizeSpan
@@ -24,6 +25,9 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.effect.OverlayEffect
 import androidx.media3.common.OverlaySettings
 import androidx.media3.effect.StaticOverlaySettings
+import androidx.media3.effect.Contrast
+import androidx.media3.effect.GaussianBlur
+import androidx.media3.effect.MatrixTransformation
 import androidx.media3.effect.Presentation
 import androidx.media3.effect.RgbMatrix
 import androidx.media3.effect.TextOverlay
@@ -87,6 +91,36 @@ class VideoExporter(private val activity: Activity) {
         }
     }
 
+    /** Colour treatment of a clip: a fixed 4x4 matrix (column-major). */
+    private class Look(private val matrix: FloatArray) : RgbMatrix {
+        override fun getMatrix(presentationTimeUs: Long, useHdr: Boolean): FloatArray = matrix
+    }
+
+    /** A motion over a whole clip, as a function of the clip's own time. */
+    private class Motion(private val kind: Int, private val durationUs: Long) : MatrixTransformation {
+        override fun getMatrix(presentationTimeUs: Long): Matrix {
+            val m = Matrix()
+            val p = (presentationTimeUs.toFloat() / durationUs.coerceAtLeast(1)).coerceIn(0f, 1f)
+            val sec = presentationTimeUs / 1_000_000f
+            when (kind) {
+                1 -> m.postScale(1f + 0.25f * p, 1f + 0.25f * p) // zoom in
+                2 -> m.postScale(1.25f - 0.25f * p, 1.25f - 0.25f * p) // zoom out
+                3 -> { // pulse: a gentle beat
+                    val k = 1f + 0.06f * (0.5f + 0.5f * Math.sin(sec * 2 * Math.PI / 0.8).toFloat())
+                    m.postScale(k, k)
+                }
+                4 -> { // shake, enlarged a little to hide the edges
+                    m.postScale(1.06f, 1.06f)
+                    m.postTranslate(
+                        0.02f * Math.sin(sec * 38.0).toFloat(),
+                        0.02f * Math.sin(sec * 51.0 + 1.0).toFloat(),
+                    )
+                }
+            }
+            return m
+        }
+    }
+
     /** A title shown between two moments of the finished video. */
     private class Title(
         private val text: String,
@@ -95,13 +129,19 @@ class VideoExporter(private val activity: Activity) {
         private val color: Int,
         private val sizePx: Int,
         private val place: Int,
+        private val align: Int,
+        private val animation: Int,
+        private val box: Int,
     ) : TextOverlay() {
         override fun getText(presentationTimeUs: Long): SpannableString {
             val visible = presentationTimeUs in startUs until endUs
             val s = SpannableString(if (visible) text else " ")
             if (visible) {
                 s.setSpan(ForegroundColorSpan(color), 0, s.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-                s.setSpan(BackgroundColorSpan(Color.argb(140, 0, 0, 0)), 0, s.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                when (box) {
+                    1 -> s.setSpan(BackgroundColorSpan(Color.argb(140, 0, 0, 0)), 0, s.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    2 -> s.setSpan(BackgroundColorSpan(Color.argb(255, 20, 20, 24)), 0, s.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                }
                 s.setSpan(AbsoluteSizeSpan(sizePx), 0, s.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                 s.setSpan(StyleSpan(Typeface.BOLD), 0, s.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             }
@@ -109,11 +149,34 @@ class VideoExporter(private val activity: Activity) {
         }
 
         override fun getOverlaySettings(presentationTimeUs: Long): OverlaySettings {
-            // 0 top, 1 middle, 2 bottom, in the frame's -1..1 coordinates.
-            val y = when (place) { 0 -> 0.8f; 1 -> 0f; else -> -0.8f }
+            // Edges of the frame: 0 top, 1 middle, 2 bottom.
+            val baseY = when (place) { 0 -> 0.92f; 1 -> 0f; else -> -0.92f }
+            val anchorY = when (place) { 0 -> 1f; 1 -> 0f; else -> -1f }
+            val x = align * 0.94f
+            val inT = (presentationTimeUs - startUs) / 1000f // ms since appearing
+            val outT = (endUs - presentationTimeUs) / 1000f // ms before leaving
+            val edge = minOf(inT, outT).coerceAtLeast(0f)
+            var alpha = 1f
+            var scale = 1f
+            var dy = 0f
+            when (animation) {
+                1 -> alpha = (edge / 350f).coerceIn(0f, 1f)
+                2 -> { // slides in from below, fades out
+                    val k = (inT / 400f).coerceIn(0f, 1f)
+                    dy = -0.18f * (1f - k) * (1f - k)
+                    alpha = minOf(k, (outT / 250f).coerceIn(0f, 1f))
+                }
+                3 -> { // pops in with a small overshoot
+                    val k = (inT / 320f).coerceIn(0f, 1f)
+                    scale = if (k < 1f) 0.4f + 0.6f * k + 0.25f * Math.sin(k * Math.PI).toFloat() else 1f
+                    alpha = (outT / 200f).coerceIn(0f, 1f)
+                }
+            }
             return StaticOverlaySettings.Builder()
-                .setBackgroundFrameAnchor(0f, y)
-                .setOverlayFrameAnchor(0f, 0f)
+                .setBackgroundFrameAnchor(x, baseY + dy)
+                .setOverlayFrameAnchor(align.toFloat(), anchorY)
+                .setAlphaScale(alpha.coerceIn(0f, 1f))
+                .setScale(scale, scale)
                 .build()
         }
     }
@@ -143,6 +206,7 @@ class VideoExporter(private val activity: Activity) {
             val music = args["music"] as String?
             val width = (args["width"] as Number).toInt()
             val height = (args["height"] as Number).toInt()
+            val fill = args["fill"] == true
 
             var totalMs = 0L
             val items = clips.map { c ->
@@ -170,8 +234,28 @@ class VideoExporter(private val activity: Activity) {
                 if (rotation != 0f) {
                     video.add(ScaleAndRotateTransformation.Builder().setRotationDegrees(-rotation).build())
                 }
-                // Every clip is fitted in the same frame, with black bars.
-                video.add(Presentation.createForWidthAndHeight(width, height, Presentation.LAYOUT_SCALE_TO_FIT))
+                if (c["flip"] == true) {
+                    video.add(ScaleAndRotateTransformation.Builder().setScale(-1f, 1f).build())
+                }
+                // Every clip is placed in the same frame: with black bars, or
+                // filling it (the edges are cropped).
+                video.add(
+                    Presentation.createForWidthAndHeight(
+                        width, height,
+                        if (fill) Presentation.LAYOUT_SCALE_TO_FIT_WITH_CROP else Presentation.LAYOUT_SCALE_TO_FIT,
+                    )
+                )
+                val motion = (c["effect"] as Number?)?.toInt() ?: 0
+                if (motion != 0) video.add(Motion(motion, outputMs * 1000))
+                val colors = c["colorMatrix"] as List<*>?
+                if (colors != null && colors.size == 16) {
+                    video.add(Look(FloatArray(16) { (colors[it] as Number).toFloat() }))
+                }
+                val contrast = (c["contrast"] as Number?)?.toFloat() ?: 0f
+                if (contrast != 0f) video.add(Contrast(contrast.coerceIn(-1f, 1f)))
+                val blur = (c["blur"] as Number?)?.toFloat() ?: 0f
+                // Sigma in pixels of the shorter side's hundredth part, up to ~2.5%.
+                if (blur > 0f) video.add(GaussianBlur(blur * 0.025f * minOf(width, height)))
                 if (fadeInMs > 0 || fadeOutMs > 0) {
                     video.add(
                         Fade(
@@ -247,6 +331,9 @@ class VideoExporter(private val activity: Activity) {
                         (t["color"] as Number).toInt(),
                         ((t["size"] as Number).toFloat() * height).toInt().coerceAtLeast(12),
                         (t["place"] as Number).toInt(),
+                        (t["align"] as Number?)?.toInt() ?: 0,
+                        (t["animation"] as Number?)?.toInt() ?: 0,
+                        (t["box"] as Number?)?.toInt() ?: 1,
                     )
                 }
                 builder.setEffects(Effects(emptyList(), listOf(OverlayEffect(overlays))))

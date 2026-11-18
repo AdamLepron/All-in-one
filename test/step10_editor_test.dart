@@ -214,6 +214,9 @@ void main() {
       'volume': 1.0,
       'fadeInMs': 0,
       'fadeOutMs': 0,
+      'flip': false,
+      'effect': 0,
+      'blur': 0.0,
     });
     expect(
       (clips.last as Map)['uri'],
