@@ -104,6 +104,43 @@ class MediaChannel {
     }
   }
 
+  /// Phone calendars that accept new events: id, name, account, color.
+  static Future<List<Map<Object?, Object?>>> calendars() async {
+    try {
+      return (await _channel.invokeListMethod<Map<Object?, Object?>>(
+            'calendars',
+          )) ??
+          const [];
+    } on MissingPluginException {
+      return const [];
+    } on PlatformException {
+      return const [];
+    }
+  }
+
+  /// Creates (no [id]) or updates an event of a phone calendar and returns
+  /// its id, or null if the phone refused.
+  static Future<int?> saveCalendarEvent(Map<String, Object?> event) async {
+    try {
+      return (await _channel.invokeMethod<num>('calendarSave', event))?.toInt();
+    } on MissingPluginException {
+      return null;
+    } on PlatformException {
+      return null;
+    }
+  }
+
+  static Future<bool> deleteCalendarEvent(int id) async {
+    try {
+      return await _channel.invokeMethod<bool>('calendarDelete', {'id': id}) ??
+          false;
+    } on MissingPluginException {
+      return false;
+    } on PlatformException {
+      return false;
+    }
+  }
+
   /// Content shared with the app that arrived before Dart was ready. Also
   /// switches on live delivery: later shares call the handler set with
   /// [onShared].
@@ -191,6 +228,22 @@ class MediaChannel {
 
   static Future<void> keepScreenOn(bool on) =>
       _quiet('keepScreenOn', {'on': on});
+
+  /// Shows a notification and keeps the app running while recording, so the
+  /// microphone stays on with the screen off.
+  static Future<bool> recordingService(bool on) =>
+      _flag('recordingService', {'on': on});
+
+  /// Name of the device's time zone, such as "Europe/Paris".
+  static Future<String?> timeZone() async {
+    try {
+      return await _channel.invokeMethod<String>('timeZone');
+    } on MissingPluginException {
+      return null;
+    } on PlatformException {
+      return null;
+    }
+  }
 
   /// What the sound goes to: {type: speaker|wired|usb|bluetooth, name}.
   static Future<Map<String, Object?>?> audioOutput() async {

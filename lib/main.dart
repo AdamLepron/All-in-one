@@ -8,6 +8,7 @@ import 'core/theme.dart';
 
 import 'package:just_audio_background/just_audio_background.dart';
 
+import 'modules/clock/alarms.dart';
 import 'modules/clock/clock_controller.dart';
 import 'modules/equalizer/equalizer_controller.dart';
 import 'modules/files/files_ui.dart';
@@ -30,11 +31,19 @@ Future<void> main() async {
   final organizer = await OrganizerStore.load();
   // Not awaited: re-arming reminders must not delay the first frame.
   organizer.refreshReminders();
+  final alarms = AlarmStore(settings);
+  // Alarms are re-armed at every launch and one-time ones that rang are cleared.
+  alarms.refresh();
   // Buttons of a reminder pressed while the app is open or in the background.
   Reminders.onAction = (action, payload) =>
       handleReminderAction(organizer, action, payload);
   // A reminder's button may have changed the database from another isolate.
-  AppLifecycleListener(onResume: organizer.reload);
+  AppLifecycleListener(
+    onResume: () {
+      organizer.reload();
+      alarms.refresh();
+    },
+  );
   // Media notification and lock-screen controls.
   await JustAudioBackground.init(
     androidNotificationChannelId: 'com.allinone.all_in_one.audio',
@@ -50,6 +59,7 @@ Future<void> main() async {
         ChangeNotifierProvider.value(value: notes),
         ChangeNotifierProvider.value(value: organizer),
         ChangeNotifierProvider.value(value: music),
+        ChangeNotifierProvider.value(value: alarms),
         ChangeNotifierProvider(
           create: (_) => EqualizerController(settings, music),
           lazy: false,

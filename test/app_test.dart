@@ -592,7 +592,9 @@ void main() {
     await open(const CalendarPage());
     expect(find.text("Réunion d'équipe"), findsOneWidget);
     await shot('37_calendar_month');
-    await tester.tap(find.byTooltip('Vue planning'));
+    await tester.tap(find.byTooltip('Changer de vue'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Planning'));
     await tester.pumpAndSettle();
     expect(find.text('Week-end à Lyon'), findsWidgets);
     await shot('38_calendar_agenda');

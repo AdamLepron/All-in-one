@@ -8,6 +8,7 @@ import '../../core/util.dart';
 import '../tasks/organizer_store.dart';
 import '../tasks/tasks_page.dart';
 import 'event_editor_page.dart';
+import 'time_grid.dart';
 
 const eventColors = <Color>[
   Color(0xFF0A84FF),
@@ -41,6 +42,30 @@ int _pageOf(DateTime month) => month.year * 12 + month.month - 1 - _epochPage;
 DateTime _monthOf(int page) =>
     DateTime((page + _epochPage) ~/ 12, (page + _epochPage) % 12 + 1);
 
+/// Weeks and days are counted from a Monday far in the past, in UTC so that
+/// daylight saving time never shifts a page.
+final _refMonday = DateTime.utc(2000, 1, 3);
+int _dayPage(DateTime d) =>
+    DateTime.utc(d.year, d.month, d.day).difference(_refMonday).inDays;
+DateTime _dayAt(int page) {
+  final u = _refMonday.add(Duration(days: page));
+  return DateTime(u.year, u.month, u.day);
+}
+
+int _weekPage(DateTime d) => (_dayPage(d) / 7).floor();
+DateTime _weekStart(int page) => _dayAt(page * 7);
+
+enum _Mode {
+  month('Mois', Icons.calendar_month),
+  week('Semaine', Icons.view_week_outlined),
+  day('Jour', Icons.calendar_view_day_outlined),
+  agenda('Planning', Icons.view_agenda_outlined);
+
+  const _Mode(this.label, this.icon);
+  final String label;
+  final IconData icon;
+}
+
 String _two(int n) => n.toString().padLeft(2, '0');
 String _hm(DateTime d) => '${d.hour}:${_two(d.minute)}';
 
@@ -59,7 +84,9 @@ class _CalendarPageState extends State<CalendarPage> {
   late DateTime _selected = dayOf(DateTime.now());
   late DateTime _month = DateTime(_selected.year, _selected.month);
   late final _pager = PageController(initialPage: _pageOf(_month));
-  bool _agenda = false;
+  _Mode _mode = _Mode.month;
+  PageController? _weekPager;
+  PageController? _dayPager;
 
   /// Events of the phone's calendars for the loaded range.
   List<Event> _device = [];
@@ -71,8 +98,22 @@ class _CalendarPageState extends State<CalendarPage> {
     _loadDevice(request: false);
   }
 
+  void _setMode(_Mode mode) {
+    _weekPager?.dispose();
+    _dayPager?.dispose();
+    _weekPager = _dayPager = null;
+    if (mode == _Mode.week) {
+      _weekPager = PageController(initialPage: _weekPage(_selected));
+    } else if (mode == _Mode.day) {
+      _dayPager = PageController(initialPage: _dayPage(_selected));
+    }
+    setState(() => _mode = mode);
+  }
+
   @override
   void dispose() {
+    _weekPager?.dispose();
+    _dayPager?.dispose();
     _pager.dispose();
     super.dispose();
   }
@@ -124,9 +165,14 @@ class _CalendarPageState extends State<CalendarPage> {
               end: end,
               allDay: allDay,
               location: (m['location'] as String?) ?? '',
+              notes: (m['notes'] as String?) ?? '',
               external: true,
               calendar: (m['calendar'] as String?) ?? '',
               externalColor: (m['color'] as num?)?.toInt(),
+              deviceId: (m['id'] as num?)?.toInt(),
+              deviceCalendarId: (m['calendarId'] as num?)?.toInt(),
+              editable: m['editable'] == true,
+              recurring: m['recurring'] == true,
             );
           }(),
       ];
@@ -143,7 +189,22 @@ class _CalendarPageState extends State<CalendarPage> {
   ]..sort((a, b) => a.start.compareTo(b.start));
 
   void _goTo(DateTime day) {
-    setState(() => _selected = dayOf(day));
+    setState(() {
+      _selected = dayOf(day);
+      _month = DateTime(day.year, day.month);
+    });
+    void animate(PageController? c, int page) {
+      if (c != null && c.hasClients && c.page?.round() != page) {
+        c.animateToPage(
+          page,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+        );
+      }
+    }
+
+    animate(_weekPager, _weekPage(day));
+    animate(_dayPager, _dayPage(day));
     final page = _pageOf(DateTime(day.year, day.month));
     if (_pager.hasClients && _pager.page?.round() != page) {
       _pager.animateToPage(
@@ -154,12 +215,35 @@ class _CalendarPageState extends State<CalendarPage> {
     }
   }
 
-  Future<void> _edit([Event? event]) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => EventEditorPage(event: event, day: _selected),
+  Future<void> _edit([Event? event, DateTime? day, int? hour]) async {
+    // Phone events that cannot be changed here are shown, not edited.
+    if (event != null &&
+        event.external &&
+        !(event.editable && !event.recurring)) {
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              event.recurring
+                  ? "Événement répétitif : modifiez-le dans l'application Agenda du téléphone"
+                  : 'Cet agenda est en lecture seule',
+            ),
+          ),
+        );
+      return;
+    }
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => EventEditorPage(
+          event: event,
+          day: day ?? _selected,
+          startHour: hour,
+        ),
       ),
     );
+    // A phone calendar may have been written to.
+    if (changed == true && _deviceAllowed) await _loadDevice(request: false);
   }
 
   @override
@@ -176,12 +260,24 @@ class _CalendarPageState extends State<CalendarPage> {
             onPressed: () => _goTo(DateTime.now()),
             child: const Text("Aujourd'hui"),
           ),
-          IconButton(
-            tooltip: _agenda ? 'Vue mois' : 'Vue planning',
-            icon: Icon(
-              _agenda ? Icons.calendar_month : Icons.view_agenda_outlined,
-            ),
-            onPressed: () => setState(() => _agenda = !_agenda),
+          PopupMenuButton<_Mode>(
+            tooltip: 'Changer de vue',
+            icon: Icon(_mode.icon),
+            initialValue: _mode,
+            onSelected: _setMode,
+            itemBuilder: (_) => [
+              for (final m in _Mode.values)
+                PopupMenuItem(
+                  value: m,
+                  child: Row(
+                    children: [
+                      Icon(m.icon, size: 20),
+                      const SizedBox(width: 12),
+                      Text(m.label),
+                    ],
+                  ),
+                ),
+            ],
           ),
         ],
       ),
@@ -238,7 +334,14 @@ class _CalendarPageState extends State<CalendarPage> {
                 ),
               ),
             ),
-          Expanded(child: _agenda ? _agendaView(store) : _monthView(store)),
+          Expanded(
+            child: switch (_mode) {
+              _Mode.month => _monthView(store),
+              _Mode.week => _weekView(store),
+              _Mode.day => _dayView(store),
+              _Mode.agenda => _agendaView(store),
+            },
+          ),
         ],
       ),
     );
@@ -352,6 +455,71 @@ class _CalendarPageState extends State<CalendarPage> {
       for (final t in tasks) TaskTile(t, dense: true),
     ];
   }
+
+  void _onGridPage(DateTime day) {
+    setState(() {
+      _selected = day;
+      _month = DateTime(day.year, day.month);
+    });
+    if (_deviceAllowed) _loadDevice(request: false);
+  }
+
+  Widget _grid(OrganizerStore store, List<DateTime> days) => TimeGrid(
+    days: days,
+    selected: _selected,
+    eventsOn: (d) =>
+        _eventsBetween(store, d, DateTime(d.year, d.month, d.day + 1)),
+    color: eventColor,
+    onEvent: _edit,
+    onCreate: (day, hour) => _edit(null, day, hour),
+    onDay: (d) {
+      _goTo(d);
+      if (_mode == _Mode.week) _setMode(_Mode.day);
+    },
+  );
+
+  Widget _weekView(OrganizerStore store) => PageView.builder(
+    controller: _weekPager,
+    onPageChanged: (page) {
+      final start = _weekStart(page);
+      // Keeps the same weekday selected in the new week.
+      _onGridPage(
+        DateTime(start.year, start.month, start.day + _selected.weekday - 1),
+      );
+    },
+    itemBuilder: (_, page) {
+      final start = _weekStart(page);
+      return _grid(store, [
+        for (var i = 0; i < 7; i++)
+          DateTime(start.year, start.month, start.day + i),
+      ]);
+    },
+  );
+
+  Widget _dayView(OrganizerStore store) => Column(
+    children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            dayLabelLong(_selected),
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+        ),
+      ),
+      Expanded(
+        child: PageView.builder(
+          controller: _dayPager,
+          onPageChanged: (page) => _onGridPage(_dayAt(page)),
+          itemBuilder: (_, page) => _grid(store, [_dayAt(page)]),
+        ),
+      ),
+    ],
+  );
 
   Widget _agendaView(OrganizerStore store) {
     final scheme = Theme.of(context).colorScheme;
@@ -573,8 +741,7 @@ class _EventTile extends StatelessWidget {
       trailing: e.repeat != Repeat.none
           ? const Icon(Icons.repeat, size: 16)
           : null,
-      // Phone calendar events are read-only here.
-      onTap: e.external ? null : onTap,
+      onTap: onTap,
     );
   }
 }

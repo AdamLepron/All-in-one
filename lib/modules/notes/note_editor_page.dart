@@ -345,7 +345,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-              child: Row(
+              child: Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                spacing: 12,
                 children: [
                   Text(
                     'Modifiée ${relativeDate(_note.updatedAt).toLowerCase()}',
@@ -353,7 +355,6 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                       color: scheme.onSurfaceVariant,
                     ),
                   ),
-                  const Spacer(),
                   Text(
                     '$_wordCount mot${_wordCount > 1 ? 's' : ''} · ${_body.text.length} caractères',
                     style: text.labelSmall?.copyWith(

@@ -3,6 +3,7 @@ import 'dart:ui' show DartPluginRegistrant;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../../core/notifications.dart';
+import '../clock/alarms.dart';
 import 'organizer_store.dart';
 
 /// Applies a press on a task reminder's button: "Terminé" completes the
@@ -14,6 +15,10 @@ Future<void> handleReminderAction(
   String? payload, {
   DateTime? now,
 }) async {
+  if (payload != null && payload.startsWith('alarm:')) {
+    await handleAlarmAction(actionId, payload, now: now);
+    return;
+  }
   if (payload == null || !payload.startsWith('task:')) return;
   final id = int.tryParse(payload.substring(5));
   if (id == null) return;
@@ -28,6 +33,29 @@ Future<void> handleReminderAction(
         ..hasTime = true;
       await store.saveTask(task);
   }
+}
+
+/// "Répéter 10 min" on a ringing alarm rings it again ten minutes later.
+/// The payload looks like alarm:ID|label.
+Future<void> handleAlarmAction(
+  String? actionId,
+  String payload, {
+  DateTime? now,
+}) async {
+  if (actionId != Reminders.alarmSnooze) return;
+  final rest = payload.substring(6);
+  final bar = rest.indexOf('|');
+  final id = int.tryParse(bar < 0 ? rest : rest.substring(0, bar));
+  if (id == null) return;
+  final label = bar < 0 ? '' : rest.substring(bar + 1);
+  final when = (now ?? DateTime.now()).add(const Duration(minutes: 10));
+  await Reminders.scheduleAlarm(
+    snoozeId(id),
+    label.isEmpty ? 'Alarme' : label,
+    'Répétée',
+    when,
+    payload: payload,
+  );
 }
 
 /// Runs when a reminder's button is pressed while the app is closed. It runs

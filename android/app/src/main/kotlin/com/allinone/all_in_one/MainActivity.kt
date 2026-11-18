@@ -74,6 +74,11 @@ class MainActivity : AudioServiceActivity() {
                                 (call.argument<Number>("start"))!!.toLong(),
                                 (call.argument<Number>("end"))!!.toLong(),
                             )
+                            "calendars" -> writableCalendars()
+                            "calendarSave" -> saveCalendarEvent(call)
+                            "calendarDelete" -> deleteCalendarEvent(
+                                (call.argument<Number>("id"))!!.toLong(),
+                            )
                             "thumbnail" -> thumbnail(
                                 (call.argument<Number>("id"))!!.toLong(),
                                 call.argument<Boolean>("video") ?: false,
@@ -197,6 +202,21 @@ class MainActivity : AudioServiceActivity() {
                     call.argument<String>("label") ?: "",
                 )
             )
+            "recordingService" -> {
+                val intent = Intent(this, RecordingService::class.java)
+                try {
+                    if (call.argument<Boolean>("on") == true) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent) else startService(intent)
+                    } else {
+                        stopService(intent)
+                    }
+                    result.success(true)
+                } catch (e: Exception) {
+                    // Recording still works with the app open.
+                    result.success(false)
+                }
+            }
+            "timeZone" -> result.success(java.util.TimeZone.getDefault().id)
             "audioOutput" -> {
                 val types = audio.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
                     .map { it.type to it.productName.toString() }
@@ -252,6 +272,10 @@ class MainActivity : AudioServiceActivity() {
             android.provider.CalendarContract.Instances.DISPLAY_COLOR,
             android.provider.CalendarContract.Instances.EVENT_LOCATION,
             android.provider.CalendarContract.Instances.CALENDAR_DISPLAY_NAME,
+            android.provider.CalendarContract.Instances.CALENDAR_ID,
+            android.provider.CalendarContract.Instances.RRULE,
+            android.provider.CalendarContract.Instances.DESCRIPTION,
+            android.provider.CalendarContract.Instances.CALENDAR_ACCESS_LEVEL,
         )
         try {
             contentResolver.query(uri, columns, null, null, null)?.use { c ->
@@ -266,6 +290,11 @@ class MainActivity : AudioServiceActivity() {
                             "color" to c.getInt(5),
                             "location" to c.getString(6),
                             "calendar" to c.getString(7),
+                            "calendarId" to c.getLong(8),
+                            "recurring" to !c.getString(9).isNullOrEmpty(),
+                            "notes" to c.getString(10),
+                            // 500 = contributor: may add and change events.
+                            "editable" to (c.getInt(11) >= 500),
                         )
                     )
                 }
@@ -275,6 +304,87 @@ class MainActivity : AudioServiceActivity() {
         }
         return events
     }
+
+    /** Calendars of the phone that accept new events. */
+    private fun writableCalendars(): List<Map<String, Any?>> {
+        val out = ArrayList<Map<String, Any?>>()
+        val cal = android.provider.CalendarContract.Calendars.CONTENT_URI
+        val columns = arrayOf(
+            android.provider.CalendarContract.Calendars._ID,
+            android.provider.CalendarContract.Calendars.CALENDAR_DISPLAY_NAME,
+            android.provider.CalendarContract.Calendars.ACCOUNT_NAME,
+            android.provider.CalendarContract.Calendars.CALENDAR_COLOR,
+        )
+        val where = "${android.provider.CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL} >= 500 " +
+            "AND ${android.provider.CalendarContract.Calendars.VISIBLE} = 1"
+        try {
+            contentResolver.query(cal, columns, where, null, null)?.use { c ->
+                while (c.moveToNext()) {
+                    out.add(
+                        mapOf(
+                            "id" to c.getLong(0),
+                            "name" to c.getString(1),
+                            "account" to c.getString(2),
+                            "color" to c.getInt(3),
+                        )
+                    )
+                }
+            }
+        } catch (e: SecurityException) {
+            // No calendar access: nothing to offer.
+        }
+        return out
+    }
+
+    /** Creates (no id) or updates an event of a phone calendar; returns its id. */
+    private fun saveCalendarEvent(call: MethodCall): Long {
+        val events = android.provider.CalendarContract.Events.CONTENT_URI
+        val id = call.argument<Number>("id")?.toLong()
+        val allDay = call.argument<Boolean>("allDay") == true
+        val values = android.content.ContentValues().apply {
+            put(android.provider.CalendarContract.Events.TITLE, call.argument<String>("title"))
+            put(android.provider.CalendarContract.Events.DTSTART, call.argument<Number>("start")!!.toLong())
+            put(android.provider.CalendarContract.Events.DTEND, call.argument<Number>("end")!!.toLong())
+            put(android.provider.CalendarContract.Events.ALL_DAY, if (allDay) 1 else 0)
+            put(android.provider.CalendarContract.Events.EVENT_LOCATION, call.argument<String>("location") ?: "")
+            put(android.provider.CalendarContract.Events.DESCRIPTION, call.argument<String>("notes") ?: "")
+            // All-day events live in UTC; the others in the user's zone.
+            put(
+                android.provider.CalendarContract.Events.EVENT_TIMEZONE,
+                if (allDay) "UTC" else java.util.TimeZone.getDefault().id,
+            )
+        }
+        if (id != null) {
+            contentResolver.update(ContentUris.withAppendedId(events, id), values, null, null)
+            return id
+        }
+        values.put(
+            android.provider.CalendarContract.Events.CALENDAR_ID,
+            call.argument<Number>("calendarId")!!.toLong(),
+        )
+        val created = contentResolver.insert(events, values)
+            ?: throw IllegalStateException("Impossible de créer l'événement")
+        val newId = ContentUris.parseId(created)
+        val reminder = call.argument<Number>("reminder")?.toInt()
+        if (reminder != null) {
+            val r = android.content.ContentValues().apply {
+                put(android.provider.CalendarContract.Reminders.EVENT_ID, newId)
+                put(android.provider.CalendarContract.Reminders.MINUTES, reminder)
+                put(
+                    android.provider.CalendarContract.Reminders.METHOD,
+                    android.provider.CalendarContract.Reminders.METHOD_ALERT,
+                )
+            }
+            contentResolver.insert(android.provider.CalendarContract.Reminders.CONTENT_URI, r)
+        }
+        return newId
+    }
+
+    private fun deleteCalendarEvent(id: Long): Boolean = contentResolver.delete(
+        ContentUris.withAppendedId(android.provider.CalendarContract.Events.CONTENT_URI, id),
+        null,
+        null,
+    ) > 0
 
     /** Every photo and video of the device, unsorted. */
     private fun queryMedia(): List<Map<String, Any?>> {

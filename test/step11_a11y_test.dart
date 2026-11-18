@@ -5,6 +5,8 @@ import 'package:all_in_one/core/theme.dart';
 import 'package:all_in_one/main.dart' show AllInOneApp;
 import 'package:all_in_one/modules/calculator/calculator_page.dart';
 import 'package:all_in_one/modules/calendar/calendar_page.dart';
+import 'package:all_in_one/modules/calendar/event_editor_page.dart';
+import 'package:all_in_one/modules/notes/note_editor_page.dart';
 import 'package:all_in_one/modules/clock/clock_controller.dart';
 import 'package:all_in_one/modules/clock/clock_page.dart';
 import 'package:all_in_one/modules/converter/converter_page.dart';
@@ -139,6 +141,8 @@ void main() {
     'Notes': () => const NotesPage(),
     'Tâches': () => const TasksPage(),
     'Agenda': () => const CalendarPage(),
+    'Nouvel événement': () => EventEditorPage(day: DateTime(2030, 3, 4)),
+    'Éditeur de note': () => const NoteEditorPage(),
     'Calculatrice': () => const CalculatorPage(),
     'Convertisseur': () => const ConverterPage(),
     'Horloge': () => const ClockPage(),

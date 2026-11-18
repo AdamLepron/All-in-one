@@ -102,15 +102,23 @@ class RecorderController extends ChangeNotifier {
     final name =
         'Enregistrement ${now.year}-${two(now.month)}-${two(now.day)} ${two(now.hour)}h${two(now.minute)}m${two(now.second)}';
     _currentPath = p.join(await _dir(), '$name.${lossless ? 'wav' : 'm4a'}');
-    await recorder.start(
-      RecordConfig(
-        encoder: lossless ? AudioEncoder.wav : AudioEncoder.aacLc,
-        bitRate: 128000,
-        sampleRate: 44100,
-        numChannels: 1,
-      ),
-      path: _currentPath!,
-    );
+    // Started first: Android only lets the microphone run in the background
+    // for an app that already shows a recording notification.
+    await MediaChannel.recordingService(true);
+    try {
+      await recorder.start(
+        RecordConfig(
+          encoder: lossless ? AudioEncoder.wav : AudioEncoder.aacLc,
+          bitRate: 128000,
+          sampleRate: 44100,
+          numChannels: 1,
+        ),
+        path: _currentPath!,
+      );
+    } on Object {
+      await MediaChannel.recordingService(false);
+      rethrow;
+    }
     waveform.clear();
     _levels = recorder
         .onAmplitudeChanged(const Duration(milliseconds: 80))
@@ -152,6 +160,7 @@ class RecorderController extends ChangeNotifier {
     final path = _currentPath;
     state = RecorderState.idle;
     unawaited(MediaChannel.keepScreenOn(false));
+    unawaited(MediaChannel.recordingService(false));
     if (path != null) {
       if (save) {
         final dir = p.dirname(path);
@@ -199,6 +208,7 @@ class RecorderController extends ChangeNotifier {
   void dispose() {
     _levels?.cancel();
     _recorder?.dispose();
+    if (state != RecorderState.idle) MediaChannel.recordingService(false);
     super.dispose();
   }
 }

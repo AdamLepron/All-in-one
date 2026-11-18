@@ -153,6 +153,10 @@ class Event {
     this.external = false,
     this.calendar = '',
     this.externalColor,
+    this.deviceId,
+    this.deviceCalendarId,
+    this.editable = false,
+    this.recurring = false,
   });
 
   int? id;
@@ -174,6 +178,15 @@ class Event {
   final bool external;
   final String calendar;
   final int? externalColor;
+
+  /// For a phone-calendar event: its id there and its calendar's id.
+  final int? deviceId;
+  final int? deviceCalendarId;
+
+  /// Whether this phone event can be changed here (not a repeating one,
+  /// and in a calendar that accepts changes).
+  final bool editable;
+  final bool recurring;
 
   Map<String, Object?> toMap() => {
     'id': id,
