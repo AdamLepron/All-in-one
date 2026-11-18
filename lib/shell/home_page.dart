@@ -8,6 +8,7 @@ import '../core/adaptive.dart';
 import '../core/modules.dart';
 import '../core/settings.dart';
 import '../modules/calendar/calendar_page.dart' show eventColors;
+import '../modules/ads/ad_widgets.dart';
 import '../modules/notes/notes_page.dart';
 import '../modules/notes/notes_store.dart';
 import '../modules/tasks/organizer_store.dart';
@@ -134,6 +135,7 @@ class HomePage extends StatelessWidget {
                 children: [for (final m in pinned) _Shortcut(m)],
               ),
             ),
+          const NativeAdCard(),
           SectionTitle(
             tr('Notes récentes'),
             trailing: TextButton(

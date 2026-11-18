@@ -18,6 +18,6 @@ respectueuse de votre vie privée. Tout reste sur votre téléphone.
 - Dossier protégé chiffré par code.
 - Widgets : tâches du jour et note rapide.
 - Adapté aux tablettes ; en français et en anglais.
-- Pas de compte, pas de publicité, pas de suivi.
+- Pas de compte. Publicités discrètes, supprimables définitivement par un achat unique.
 
 **Catégorie** : Outils · **Prix** : gratuit

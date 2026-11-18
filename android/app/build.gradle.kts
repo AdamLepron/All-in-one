@@ -30,6 +30,11 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // AdMob application id; the test one until a real one is passed with
+        // -PadmobAppId=ca-app-pub-…~… (or in android/gradle.properties).
+        manifestPlaceholders["admobAppId"] =
+            (project.findProperty("admobAppId") as String?)
+                ?: "ca-app-pub-3940256099942544~3347511713"
     }
 
     // Test-only key, committed so every test APK carries the same signature and

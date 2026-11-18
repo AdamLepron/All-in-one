@@ -23,6 +23,7 @@ import 'modules/recorder/recorder_controller.dart';
 import 'modules/scanner/scan_store.dart';
 import 'modules/tasks/organizer_store.dart';
 import 'modules/tasks/reminder_actions.dart';
+import 'modules/ads/ads_controller.dart';
 import 'shell/app_shell.dart';
 
 Future<void> main() async {
@@ -56,6 +57,9 @@ Future<void> main() async {
   );
   // Silent: reads the library only if access was already granted.
   final music = MusicController(settings)..loadLibrary(request: false);
+  // Ads and the purchase that removes them: started without waiting, and
+  // not at all for someone who already bought the removal.
+  final ads = AdsController(settings)..start();
   runApp(
     MultiProvider(
       providers: [
@@ -64,6 +68,7 @@ Future<void> main() async {
         ChangeNotifierProvider.value(value: organizer),
         ChangeNotifierProvider.value(value: music),
         ChangeNotifierProvider.value(value: alarms),
+        ChangeNotifierProvider.value(value: ads),
         ChangeNotifierProvider(
           create: (_) => EqualizerController(settings, music),
           lazy: false,

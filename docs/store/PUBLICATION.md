@@ -45,6 +45,34 @@ l'exige à la place de l'APK. La clé de ce dossier (`test.keystore`) ne doit
 5. Classification du contenu, public cible (13+), déclaration « pas de publicité ».
 6. Piste de test interne d'abord, puis production.
 
+## 3 bis. Publicités et achat intégré
+
+1. **AdMob** (admob.google.com) : créez l'application (Android), puis deux
+   blocs d'annonces : une **bannière** et une **native avancée**. Vous obtenez
+   un identifiant d'application (`ca-app-pub-…~…`) et deux identifiants de
+   bloc (`ca-app-pub-…/…`).
+2. Construisez avec vos identifiants (sans eux, ce sont ceux de **test** de
+   Google : aucune vraie annonce, aucun revenu) :
+   ```
+   flutter build appbundle --release \
+     --dart-define=ADMOB_BANNER=ca-app-pub-XXX/YYY \
+     --dart-define=ADMOB_NATIVE=ca-app-pub-XXX/ZZZ \
+     -PadmobAppId=ca-app-pub-XXX~WWW
+   ```
+   (`-PadmobAppId` peut aussi aller dans `android/gradle.properties`.)
+3. **Message de consentement (RGPD)** : AdMob → Confidentialité et messagerie
+   → créez le formulaire « Consentement européen » et publiez-le, sinon les
+   utilisateurs de l'EEE ne verront pas d'annonces.
+4. **app-ads.txt** : si vous avez un site de développeur, publiez la ligne
+   donnée par AdMob (facultatif mais recommandé).
+5. **Play Console → Monétiser → Produits → Produits ponctuels** : créez un
+   produit géré dont l'identifiant est exactement `remove_ads`, avec le prix
+   voulu, et activez-le. Il n'est disponible que dans une version publiée
+   (même en test interne) installée depuis le Play Store, par un compte
+   testeur.
+6. Dans la fiche : cochez « Contient des annonces » et « Achats intégrés »,
+   et reprenez `DATA_SAFETY.md`.
+
 ## 4. Points d'attention (à lire avant d'envoyer)
 
 - **Accès à tous les fichiers (`MANAGE_EXTERNAL_STORAGE`)** : Google Play ne
@@ -60,6 +88,8 @@ l'exige à la place de l'APK. La clé de ce dossier (`test.keystore`) ne doit
   lecture média en arrière-plan** : déclarations à justifier dans la console.
 - **Lecture de radios en HTTP** : `usesCleartextTraffic` est activé car
   beaucoup de flux radio ne sont pas en HTTPS.
+- **Publicités sur une appli qui demande l'accès à tous les fichiers** : le
+  risque de refus de `MANAGE_EXTERNAL_STORAGE` augmente un peu ; gardez le plan B.
 - **Version cible** : Google exige une `targetSdk` récente ; la valeur est
   celle du Flutter installé (vérifiez-la au moment de l'envoi).
 - **Calendrier et contacts du téléphone** : demandés seulement à l'usage.

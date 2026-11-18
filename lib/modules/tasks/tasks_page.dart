@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/notifications.dart';
 import '../../core/util.dart';
+import '../ads/ad_widgets.dart';
 import '../files/files_ui.dart' show askName, showMessage;
 import 'organizer_store.dart';
 import 'quick_add.dart';
@@ -233,7 +234,8 @@ class _TasksPageState extends State<TasksPage> {
                 : ListView(
                     padding: const EdgeInsets.only(bottom: 12),
                     children: [
-                      for (final (label, items) in sections) ...[
+                      for (final (n, (label, items)) in sections.indexed) ...[
+                        if (n == 1) const NativeAdCard(),
                         if (label.isNotEmpty)
                           Padding(
                             padding: const EdgeInsets.fromLTRB(20, 14, 20, 4),

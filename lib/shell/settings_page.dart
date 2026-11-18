@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../core/crash_log.dart';
 import '../core/l10n.dart';
 import '../core/settings.dart';
+import '../modules/ads/ad_widgets.dart';
 import '../modules/backup/backup_page.dart';
 import 'incidents_page.dart';
 
@@ -139,11 +140,13 @@ class SettingsPage extends StatelessWidget {
               if (context.mounted) (context as Element).markNeedsBuild();
             },
           ),
+          label(tr('Publicités')),
+          const AdsSettingsSection(),
           label(tr('À propos')),
           const ListTile(
             leading: Icon(Icons.info_outline),
             title: Text('All-in-One'),
-            subtitle: Text('Version 3.0.0 · Éditeur vidéo façon CapCut'),
+            subtitle: Text('Version 3.1.0 · Publicités discrètes et achat pour les retirer'),
           ),
         ],
       ),

@@ -121,6 +121,21 @@ const _english = <String, String>{
   'Toute la journée': 'All day',
   // Create sheet
   'Nouvelle note': 'New note',
+  'Annonce': 'Ad',
+  'Publicités': 'Ads',
+  'Publicités supprimées': 'Ads removed',
+  'Merci pour votre soutien !': 'Thank you for your support!',
+  'Supprimer les publicités': 'Remove ads',
+  'Achat unique': 'One-time purchase',
+  'Achat unique · indisponible pour le moment':
+      'One-time purchase · unavailable right now',
+  "L'achat n'est pas disponible pour le moment":
+      'Purchase is not available right now',
+  'Restaurer mon achat': 'Restore my purchase',
+  'Après une réinstallation ou un changement de téléphone':
+      'After reinstalling or changing phone',
+  'Vérification auprès de Google Play…': 'Checking with Google Play…',
+  'Choix de confidentialité des annonces': 'Ad privacy choices',
   'Tâches du jour': 'Tasks for today',
   'Rien de prévu': 'Nothing planned',
   'Note rapide': 'Quick note',

@@ -129,6 +129,12 @@
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_note_info"/>
         </receiver>
+        <!-- AdMob application id: Google's test id unless one is given at build
+             time (see docs/store/PUBLICATION.md). The app crashes at start
+             without it. -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="${admobAppId}"/>
         <!-- Fetches the text recognition model when the app is installed. -->
         <meta-data
             android:name="com.google.mlkit.vision.DEPENDENCIES"

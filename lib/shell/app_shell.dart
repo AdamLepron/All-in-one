@@ -13,6 +13,7 @@ import '../modules/calendar/event_editor_page.dart';
 import '../modules/share/incoming.dart';
 import '../modules/share/share_sheet.dart';
 import '../modules/docs/document_editor_page.dart';
+import '../modules/ads/ad_widgets.dart';
 import '../modules/music/mini_player.dart';
 import '../modules/notes/notes_page.dart';
 import '../modules/tasks/organizer_store.dart';
@@ -133,6 +134,7 @@ class _AppShellState extends State<AppShell> {
         bottomNavigationBar: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            const AdBanner(),
             const MiniPlayer(),
             if (!rail)
               NavigationBar(
@@ -247,6 +249,7 @@ class FamilyPage extends StatelessWidget {
             SectionTitle(ready.isEmpty ? 'En préparation' : 'Prochainement'),
             ModuleGrid(soon),
           ],
+          const NativeAdCard(),
         ],
       ),
     );
