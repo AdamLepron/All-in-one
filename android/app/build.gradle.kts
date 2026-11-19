@@ -91,6 +91,10 @@ dependencies {
     implementation("androidx.media3:media3-transformer:1.11.1")
     implementation("androidx.media3:media3-effect:1.11.1")
     implementation("androidx.media3:media3-common:1.11.1")
+    // The ads library pulls in WorkManager 2.7.0 (and Room 2.2.5), which
+    // crashes at launch on Android 14 and later (a broadcast receiver without
+    // the export flag). A recent version replaces it.
+    implementation("androidx.work:work-runtime:2.10.0")
     // Table of contents and text search in PDF files.
     implementation("com.tom-roush:pdfbox-android:2.0.27.0")
 }

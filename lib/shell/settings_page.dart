@@ -147,7 +147,7 @@ class SettingsPage extends StatelessWidget {
             leading: Icon(Icons.info_outline),
             title: Text('All-in-One'),
             subtitle: Text(
-              'Version 3.1.1 · Démarrage renforcé',
+              'Version 3.1.3 · Démarrage corrigé (pubs)',
             ),
           ),
         ],
