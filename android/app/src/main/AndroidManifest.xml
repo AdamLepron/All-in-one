@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <!-- Local transfer: serve and receive files over the Wi-Fi network -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
@@ -34,7 +35,7 @@
     <application
         android:usesCleartextTraffic="true"
         android:label="All-in-One"
-        android:name="${applicationName}"
+        android:name=".AllInOneApplication"
         android:icon="@mipmap/ic_launcher"
         android:requestLegacyExternalStorage="true">
         <service
@@ -129,6 +130,13 @@
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_note_info"/>
         </receiver>
+        <!-- The ads SDK is started by the app itself, once the screen is up
+             and consent is settled; its automatic start at process launch is
+             removed so an ads problem can never keep the app from opening. -->
+        <provider
+            android:name="com.google.android.gms.ads.MobileAdsInitProvider"
+            android:authorities="${applicationId}.mobileadsinitprovider"
+            tools:node="remove"/>
         <!-- AdMob application id: Google's test id unless one is given at build
              time (see docs/store/PUBLICATION.md). The app crashes at start
              without it. -->

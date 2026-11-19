@@ -1,6 +1,7 @@
 import 'dart:ui' show PlatformDispatcher;
 
 import 'package:material_ui/material_ui.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
 import 'core/adaptive.dart';
@@ -26,10 +27,29 @@ import 'modules/tasks/reminder_actions.dart';
 import 'modules/ads/ads_controller.dart';
 import 'shell/app_shell.dart';
 
+/// What the native side noted about an earlier crash, if anything.
+Future<String?> _readNativeCrash() async {
+  try {
+    return CrashLog.importNative(await getApplicationSupportDirectory());
+  } on Object {
+    return null;
+  }
+}
+
+/// True when a native crash points at the ads, billing or their helpers.
+bool _mentionsAds(String? trace) =>
+    trace != null &&
+    RegExp(
+      'googlemobileads|gms\\.ads|billingclient|inapppurchase|androidx\\.work|webviewflutter',
+      caseSensitive: false,
+    ).hasMatch(trace);
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await CrashLog.init();
   CrashLog.install();
+  // A crash the native side saw during an earlier launch goes to the journal.
+  final nativeCrash = await _readNativeCrash();
   final settings = await AppSettings.load();
   final notes = await NotesStore.open();
   await Reminders.init(background: reminderBackground);
@@ -59,7 +79,9 @@ Future<void> main() async {
   final music = MusicController(settings)..loadLibrary(request: false);
   // Ads and the purchase that removes them: started without waiting, and
   // not at all for someone who already bought the removal.
-  final ads = AdsController(settings)..start();
+  final ads = AdsController(settings, crashed: _mentionsAds(nativeCrash));
+  // The ads start a few seconds after the screen is up, never during launch.
+  Future<void>.delayed(const Duration(seconds: 4), ads.start);
   runApp(
     MultiProvider(
       providers: [

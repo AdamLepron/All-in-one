@@ -10,3 +10,11 @@
 -dontwarn com.tom_roush.pdfbox.**
 -keep class com.tom_roush.pdfbox.** { *; }
 -keep class com.tom_roush.fontbox.** { *; }
+
+# Ads, billing and the web view the ads plugin relies on: kept whole, so that
+# shrinking can never remove something they load by name.
+-keep class io.flutter.plugins.googlemobileads.** { *; }
+-keep class io.flutter.plugins.inapppurchase.** { *; }
+-keep class io.flutter.plugins.webviewflutter.** { *; }
+-keep class com.android.billingclient.** { *; }
+-dontwarn com.google.android.gms.ads.**

@@ -142,6 +142,32 @@ void main() {
     });
   });
 
+  group('safety', () {
+    test('a crash that involved the ads keeps them off, for good', () async {
+      final ads = FakeAds();
+      final c = AdsController(
+        settings,
+        ads: ads,
+        purchases: FakePurchases(),
+        crashed: true,
+      );
+      await c.start();
+      expect(ads.initialized, 0);
+      expect(c.canShow, isFalse);
+      expect(c.disabledByCrash, isTrue);
+      c.dispose();
+      // The next launch, with no new crash report, is still off.
+      final again = AdsController(
+        settings,
+        ads: FakeAds(),
+        purchases: FakePurchases(),
+      );
+      await again.start();
+      expect(again.canShow, isFalse);
+      again.dispose();
+    });
+  });
+
   group('widgets', () {
     Widget host(AdsController? ads, Widget child) {
       final page = MaterialApp(home: Scaffold(body: child));

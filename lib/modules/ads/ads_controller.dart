@@ -166,11 +166,21 @@ class PlayPurchases implements PurchaseBackend {
 /// Nothing is initialized — not even the consent form — for someone who
 /// bought the removal: the ads SDK never starts for them.
 class AdsController extends ChangeNotifier {
-  AdsController(this._settings, {AdsBackend? ads, PurchaseBackend? purchases})
-    : _ads = ads ?? GoogleAds(),
-      _purchases = purchases ?? PlayPurchases();
+  AdsController(
+    this._settings, {
+    AdsBackend? ads,
+    PurchaseBackend? purchases,
+    bool crashed = false,
+  }) : _ads = ads ?? GoogleAds(),
+       _purchases = purchases ?? PlayPurchases() {
+    // A crash that pointed at the ads on an earlier launch: they stay off.
+    if (crashed && _settings.raw(_crashKey) != '1') {
+      _settings.setRaw(_crashKey, '1');
+    }
+  }
 
   static const _key = 'adsRemoved';
+  static const _crashKey = 'adsCrashed';
 
   final AppSettings _settings;
   final AdsBackend _ads;
@@ -185,7 +195,10 @@ class AdsController extends ChangeNotifier {
   bool get removed => _settings.raw(_key) == '1';
 
   /// Ads may be shown now.
-  bool get canShow => !removed && _ready;
+  bool get canShow => !removed && !disabledByCrash && _ready;
+
+  /// The ads were switched off because they were involved in a crash.
+  bool get disabledByCrash => _settings.raw(_crashKey) == '1';
 
   String? get price => _purchases.price;
   bool get privacyOptionsAvailable => _privacyOptions && !removed;
@@ -197,7 +210,7 @@ class AdsController extends ChangeNotifier {
     });
     await _purchases.start();
     _notify();
-    if (removed) return;
+    if (removed || disabledByCrash) return;
     _ready = await _ads.initialize();
     _privacyOptions = await _ads.privacyOptionsAvailable();
     _notify();

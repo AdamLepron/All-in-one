@@ -51,7 +51,7 @@ class BackupService {
     required this.recordingsDir,
     this.noteFilesDir,
     this.annotationsDir,
-    this.appVersion = '3.1.0',
+    this.appVersion = '3.1.1',
   });
 
   final NotesStore notes;

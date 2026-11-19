@@ -40,6 +40,22 @@ class CrashLog {
     };
   }
 
+  /// Takes in what the native side wrote about a crash it saw (the file is
+  /// removed once read). Returns the text, or null when there was none.
+  static String? importNative(Directory dir) {
+    try {
+      final f = File('${dir.path}/native_crash.txt');
+      if (!f.existsSync()) return null;
+      final text = f.readAsStringSync();
+      f.deleteSync();
+      if (text.trim().isEmpty) return null;
+      record(text.trim(), null, source: 'Android');
+      return text;
+    } on Object {
+      return null;
+    }
+  }
+
   /// Appends one entry. Never throws.
   static void record(Object error, StackTrace? stack, {String source = ''}) {
     final file = _file;

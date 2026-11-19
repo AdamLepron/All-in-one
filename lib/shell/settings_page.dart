@@ -146,7 +146,9 @@ class SettingsPage extends StatelessWidget {
           const ListTile(
             leading: Icon(Icons.info_outline),
             title: Text('All-in-One'),
-            subtitle: Text('Version 3.1.0 · Publicités discrètes et achat pour les retirer'),
+            subtitle: Text(
+              'Version 3.1.1 · Démarrage renforcé',
+            ),
           ),
         ],
       ),
