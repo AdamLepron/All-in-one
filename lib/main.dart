@@ -71,7 +71,7 @@ Future<void> main() async {
   );
   // Media notification and lock-screen controls.
   await JustAudioBackground.init(
-    androidNotificationChannelId: 'com.allinone.all_in_one.audio',
+    androidNotificationChannelId: 'com.wargheadstudio.allinone.audio',
     androidNotificationChannelName: 'Lecture audio',
     androidNotificationOngoing: true,
   );
