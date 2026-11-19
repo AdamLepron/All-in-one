@@ -18,3 +18,10 @@
 -keep class io.flutter.plugins.webviewflutter.** { *; }
 -keep class com.android.billingclient.** { *; }
 -dontwarn com.google.android.gms.ads.**
+
+# Room creates its generated database classes by name with a no-argument
+# constructor. Without this, shrinking removes that constructor and WorkManager
+# (started by the ads library) crashes the app at launch.
+-keep class * extends androidx.room.RoomDatabase { <init>(); }
+-keep class androidx.work.impl.WorkDatabase_Impl { <init>(); }
+-keep class androidx.work.impl.** extends androidx.room.RoomDatabase { *; }
