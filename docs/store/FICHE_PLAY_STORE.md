@@ -1,6 +1,6 @@
 # Fiche de publication — Google Play Store
 
-**Application** : All-in-One · **Identifiant** : `com.wargheadstudio.allinone` · **Version** : 3.2.0 (code 27)
+**Application** : All-in-One · **Identifiant** : `com.wargheadstudio.allinone` · **Version** : 3.2.1 (code 28)
 Tout ce qui suit est à copier-coller dans la Play Console. Les fichiers graphiques sont dans `docs/store/assets/`.
 
 ---

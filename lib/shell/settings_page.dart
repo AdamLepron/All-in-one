@@ -147,7 +147,7 @@ class SettingsPage extends StatelessWidget {
             leading: Icon(Icons.info_outline),
             title: Text('All-in-One'),
             subtitle: Text(
-              'Version 3.2.0 · Nouvelle icône et identifiant définitif',
+              'Version 3.2.1 · Version Play Store',
             ),
           ),
         ],
